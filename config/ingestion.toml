@@ -1,0 +1,9 @@
+[matchhistory]
+league = "ENG-Premier League"
+seasons = ["2122", "2223", "2324"]
+mode = "hybrid"
+raw_dir = "data/bronze/matchhistory/raw"
+inbox_dir = "data/bronze/matchhistory/inbox"
+manifest_dir = "data/bronze/matchhistory/manifests"
+required_columns = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"]
+

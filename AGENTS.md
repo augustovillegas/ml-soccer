@@ -14,6 +14,7 @@
 - No usar `pip` global ni asumir que el entorno esta activado.
 - Cuando se actualicen dependencias directas del proyecto, reflejarlas en `requirements.txt`.
 - Para notebooks de este proyecto, usar el kernel dedicado `football-ml (.venv)` en lugar del kernel generico `python3`.
+- Usar `.\scripts\bootstrap.ps1`, `.\scripts\validate-project.ps1` y `.\scripts\ingest-matchhistory.ps1` como interfaces oficiales del proyecto en Windows.
 
 ## Regla de mantenimiento de la bitacora
 
@@ -40,4 +41,6 @@
 - Si el documento no alcanza para resolver una duda concreta, complementar despues con la documentacion oficial o con validaciones adicionales, pero no omitir la consulta inicial del reporte interno.
 - En notebooks o scripts de scraping con `soccerdata`, configurar `data_dir` dentro de `data/bronze/...` para que el cache y los datos raw queden dentro de la estructura del proyecto.
 - Si `MatchHistory` devuelve `HTTP 503` o `ConnectionError` al leer `football-data.co.uk`, tratarlo primero como una indisponibilidad temporal del proveedor externo, no como una falla local de dependencias o de sintaxis.
+- La ingesta oficial no debe quedar implementada en notebooks. Los notebooks leen y exploran datos persistidos en `data/bronze/...`; la descarga y validacion se ejecutan desde los scripts oficiales.
+- Cuando falle la descarga automatica de `MatchHistory`, el fallback manual debe usar `data/bronze/matchhistory/inbox` y nombres canonicos `eng_premier_league_<temporada>.csv`.
 

@@ -228,9 +228,77 @@ Cambio aplicado:
 Procedimiento de revision final:
 
 ```powershell
-Get-ChildItem AGENTS.md, BITACORA_ENTORNO.md, .\docs\research\README.md, .\docs\research\soccer-deep-research-report.md, .\notebooks\01_explorer_matchhistory.ipynb | Select-String -Pattern 'fÃ|librerÃ|cachÃ|versiÃ|estÃ|mÃ|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã±'
+.\scripts\validate-project.ps1
 ```
 
 Resultado esperado:
 
-- Sin coincidencias en los archivos fuente revisados
+- Validacion completa sin mojibakes en archivos fuente del proyecto
+
+### 14. Crear la configuracion oficial de ingesta bronze
+
+Cambio aplicado:
+
+- Se agrego `config\ingestion.toml` como fuente unica de configuracion para `MatchHistory`.
+- La configuracion fija la liga `ENG-Premier League`, las temporadas `2122`, `2223`, `2324`, el modo `hybrid` y las rutas oficiales `raw`, `inbox` y `manifests`.
+
+Resultado observado:
+
+- La automatizacion ya no depende de rutas hardcodeadas dispersas en notebooks.
+
+### 15. Crear interfaces oficiales del proyecto
+
+Comandos oficiales:
+
+```powershell
+.\scripts\bootstrap.ps1
+.\scripts\validate-project.ps1
+.\scripts\ingest-matchhistory.ps1
+```
+
+Resultado esperado:
+
+- `bootstrap.ps1` prepara o valida el entorno, registra el kernel y corre la validacion final.
+- `validate-project.ps1` revisa entorno, notebook, kernel, rutas y mojibake.
+- `ingest-matchhistory.ps1` ejecuta la ingesta bronze idempotente con fallback manual.
+
+### 16. Ejecutar la ingesta bronze con fallback manual
+
+Comando:
+
+```powershell
+.\scripts\ingest-matchhistory.ps1
+```
+
+Comando para forzar una nueva ejecucion:
+
+```powershell
+.\scripts\ingest-matchhistory.ps1 -Force
+```
+
+Comando para limitar temporadas:
+
+```powershell
+.\scripts\ingest-matchhistory.ps1 -Seasons 2122,2223,2324
+```
+
+Resultado esperado:
+
+- Si la descarga automatica funciona, se guardan CSV canonicos en `data\bronze\matchhistory\raw`.
+- Si `football-data.co.uk` devuelve `503` o `ConnectionError`, la automatizacion busca CSV manuales canonicos en `data\bronze\matchhistory\inbox`.
+- Cada temporada genera o actualiza un manifest JSON en `data\bronze\matchhistory\manifests`.
+
+### 17. Validar el proyecto despues de cambios estructurales
+
+Comando:
+
+```powershell
+.\scripts\validate-project.ps1
+```
+
+Resultado esperado:
+
+- `.gitignore` existe y protege entornos, checkpoints, logs y datos locales.
+- El notebook principal usa el kernel `football-ml (.venv)` y no intenta scrapear datos online.
+- Las rutas oficiales de `bronze` y `logs` existen.
+- No quedan mojibakes visibles en archivos fuente controlados.

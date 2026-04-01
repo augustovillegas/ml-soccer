@@ -1,10 +1,10 @@
-# Soccerdata para machine learning en fútbol
+# Soccerdata para machine learning en futbol
 
 ## Resumen ejecutivo
 
-`soccerdata` es una librería de Python orientada a extraer y normalizar datos de fútbol desde múltiples fuentes, con salida principal en `pandas.DataFrame` y soporte de caché local. Para este proyecto, su valor principal está en facilitar una primera capa de ingestión y exploración para tareas de análisis y modelado.
+`soccerdata` es una libreria de Python para extraer y normalizar datos de futbol desde varias fuentes publicas. En este proyecto sirve como puerta de entrada rapida para construir una capa `bronze` reproducible y explorarla con `pandas`.
 
-En la versión `1.8.8`, la API pública expone scrapers para:
+La version instalada en el proyecto es `1.8.8`. Las clases principales expuestas por la API incluyen:
 
 - `ClubElo`
 - `ESPN`
@@ -15,64 +15,70 @@ En la versión `1.8.8`, la API pública expone scrapers para:
 - `Understat`
 - `WhoScored`
 
-Para objetivos de machine learning sobre resultados y eventos de partidos, las fuentes más relevantes son:
+## Fuentes mas utiles para este proyecto
 
-- `MatchHistory`: resultados históricos, odds y estadísticas de partido
-- `Understat`: xG, tiros y métricas avanzadas
-- `FBref`: estadísticas agregadas, fixtures y eventos
-- `ClubElo`: ratings históricos de equipos
-- `WhoScored`: flujo de eventos detallado
+- `MatchHistory`: resultados historicos, odds prepartido y estadisticas basicas de partido.
+- `Understat`: xG, tiros y metricas avanzadas.
+- `FBref`: estadisticas agregadas, fixtures y tablas.
+- `ClubElo`: ratings historicos de equipos.
+- `WhoScored`: eventos de partido mas detallados.
 
-## Puntos clave para este proyecto
+## MatchHistory como base bronze
 
-### 1. MatchHistory es útil para una capa bronze inicial
+`MatchHistory` es la fuente mas directa para iniciar un pipeline de partidos porque trabaja sobre los CSV de `football-data.co.uk` y ofrece un acceso simple por liga y temporada.
 
-`MatchHistory` es una de las fuentes más directas para comenzar un pipeline de datos de partidos porque entrega:
-
-- goles finales y al descanso
-- resultado del partido
-- árbitro
-- tiros y tiros al arco
-- fouls, córners y tarjetas
-- múltiples columnas de odds
-
-Método principal:
+Ejemplo base:
 
 ```python
-mh = sd.MatchHistory(leagues="ENG-Premier League", seasons=["2122", "2223", "2324"])
+import soccerdata as sd
+
+mh = sd.MatchHistory(
+    leagues="ENG-Premier League",
+    seasons=["2122", "2223", "2324"],
+)
 df = mh.read_games()
 ```
 
-### 2. Los identificadores de liga deben usar el formato interno de soccerdata
+### Datos que normalmente aporta
 
-Para Premier League, el identificador esperado es:
+- fecha del partido
+- equipo local y visitante
+- goles finales y al descanso
+- resultado final
+- arbitro
+- tiros, tiros al arco, corners, fouls y tarjetas
+- multiples columnas de odds
+
+## Convenciones recomendadas en este proyecto
+
+### Liga
+
+Para Premier League, usar siempre:
 
 ```python
 "ENG-Premier League"
 ```
 
-Esto es importante porque la librería usa claves internas por país y competencia.
+### Temporadas
 
-### 3. Las temporadas deben declararse en un formato no ambiguo
-
-En este proyecto conviene usar:
+Usar temporadas no ambiguas:
 
 ```python
 ["2122", "2223", "2324"]
 ```
 
-Evitar valores como `2021`, `2022` o `2023` cuando la fuente o el scraper puedan interpretarlos de forma ambigua.
+Evitar `2021`, `2022` o `2023` cuando la fuente pueda interpretarlas de manera ambigua.
 
-### 4. El caché y los datos raw deben quedar dentro del proyecto
+### data_dir del proyecto
 
-Aunque `soccerdata` puede guardar caché en una ruta de usuario global, para este proyecto conviene usar `data_dir` dentro de `data/bronze/...` para mantener una estructura reproducible.
+No depender del cache global del usuario. La configuracion del proyecto debe apuntar a una ruta dentro de `data/bronze/...`.
 
 Ejemplo:
 
 ```python
 from pathlib import Path
 
-RUTA_BRONZE = Path("data/bronze/matchhistory")
+RUTA_BRONZE = Path("data/bronze/matchhistory/raw")
 
 mh = sd.MatchHistory(
     leagues="ENG-Premier League",
@@ -83,92 +89,25 @@ mh = sd.MatchHistory(
 
 ## Riesgos operativos
 
-### 1. Fragilidad del scraping
+### Fragilidad del scraping
 
-La librería depende de sitios externos que pueden cambiar HTML, endpoints o medidas anti-bot. Eso significa que una configuración correcta localmente no garantiza disponibilidad permanente de la fuente.
+La libreria depende de sitios externos. Si cambian endpoints, HTML, protecciones anti-bot o disponibilidad, la configuracion local puede seguir correcta y aun asi fallar la descarga.
 
-### 2. Indisponibilidad temporal del proveedor
+### Proveedor temporalmente caido
 
-En `MatchHistory`, la descarga depende de `football-data.co.uk`. Si el sitio devuelve `HTTP 503`, el problema debe tratarse primero como indisponibilidad del proveedor externo y no como falla del entorno local, del kernel o de las dependencias instaladas.
+En `MatchHistory`, un `HTTP 503` desde `football-data.co.uk` debe tratarse primero como una indisponibilidad del proveedor externo y no como una falla de sintaxis, kernel o dependencias.
 
-### 3. Diferencias entre documentación, metadata y estado real
+### Diferencia entre notebook e ingesta oficial
 
-En librerías de scraping es común que la documentación, PyPI y el código no estén siempre alineados al cien por ciento. Por eso, antes de asumir soporte de una fuente, conviene validar:
+Los notebooks no deben ser la capa oficial de ingesta. La descarga y la validacion deben ejecutarse desde scripts o modulos reutilizables, y los notebooks deben leer CSV ya persistidos en `data/bronze`.
 
-- clases realmente expuestas por la versión instalada
-- métodos disponibles
-- estabilidad real de la fuente
+## Recomendacion operativa
 
-## API pública relevante
+Para este proyecto, la estrategia mas estable es:
 
-### Clases principales expuestas
+1. Intentar descarga automatica con `soccerdata`.
+2. Guardar CSV canonicos en `data/bronze/matchhistory/raw`.
+3. Si el proveedor responde `503`, usar fallback manual con CSV en `data/bronze/matchhistory/inbox`.
+4. Explorar datos desde bronze en Jupyter, sin volver a descargar desde la red.
 
-- `ClubElo`
-- `ESPN`
-- `FBref`
-- `MatchHistory`
-- `Sofascore`
-- `SoFIFA`
-- `Understat`
-- `WhoScored`
-
-### Métodos útiles para pipelines
-
-- `MatchHistory.read_games()`
-- `FBref.read_schedule()`
-- `FBref.read_team_match_stats()`
-- `FBref.read_shot_events()`
-- `Understat.read_team_match_stats()`
-- `Understat.read_shot_events()`
-- `WhoScored.read_events()`
-- `ClubElo.read_by_date()`
-
-## Recomendaciones para implementación
-
-### Estructura de datos
-
-- `data/bronze`: datos raw descargados desde la fuente
-- `data/silver`: normalización y limpieza
-- `data/gold`: datasets listos para análisis o modelado
-
-### Convención para notebooks
-
-- usar kernel dedicado del proyecto
-- validar `sys.executable` al inicio
-- parametrizar `league`, `seasons` y `data_dir`
-- capturar errores de red con `try/except`
-
-### Convención para validación inicial
-
-Después de descargar datos, revisar al menos:
-
-- `shape`
-- columnas
-- tipos de dato
-- nulos por columna
-- rango temporal
-
-## Recomendación práctica para este proyecto
-
-La secuencia más razonable para empezar es:
-
-1. Descargar `MatchHistory` para Premier League en `bronze`
-2. Explorar columnas, tipos y nulos
-3. Definir un contrato mínimo de datos para partidos
-4. Evaluar luego joins con `Understat`, `FBref` o `ClubElo`
-
-## Fuentes de referencia recomendadas
-
-- Documentación oficial: `https://soccerdata.readthedocs.io/en/latest/`
-- Referencia de API: `https://soccerdata.readthedocs.io/en/latest/reference/index.html`
-- Repositorio: `https://github.com/probberechts/soccerdata`
-- PyPI: `https://pypi.org/project/soccerdata/`
-
-## Uso de este documento
-
-Este archivo debe utilizarse como referencia interna primaria del proyecto cada vez que haya que profundizar sobre:
-
-- qué fuentes soporta `soccerdata`
-- cómo configurar `MatchHistory`
-- qué riesgos tiene el scraping
-- cómo integrar la librería dentro de notebooks y pipelines del proyecto
+Esa separacion reduce friccion, mejora la reproducibilidad y deja la automatizacion lista para conectarse mas adelante a un scheduler.
