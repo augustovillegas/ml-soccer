@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from argparse import ArgumentParser
 from importlib import import_module
 import json
 from pathlib import Path
@@ -88,7 +89,39 @@ def _check_notebook() -> list[str]:
     return issues
 
 
+def _check_required_paths(config) -> list[str]:
+    issues: list[str] = []
+    required_paths = [
+        PROJECT_ROOT / ".gitignore",
+        PROJECT_ROOT / "pyproject.toml",
+        PROJECT_ROOT / "requirements.txt",
+        CONFIG_DIR / "ingestion.toml",
+        KERNELSPEC_PATH,
+        DATA_DIR / "bronze",
+        DATA_DIR / "silver",
+        DATA_DIR / "gold",
+        LOGS_DIR / "ingestion",
+        *config.iter_required_dirs(),
+    ]
+    for path in required_paths:
+        if not path.exists():
+            issues.append(f"Falta la ruta requerida: {path}")
+    return issues
+
+
+def parse_args() -> ArgumentParser:
+    parser = ArgumentParser(description="Valida la configuracion estructural del proyecto football-ml.")
+    parser.add_argument(
+        "--scope",
+        choices=("project", "runtime"),
+        default="project",
+        help="Scope 'project' valida tambien notebook y archivos fuente. Scope 'runtime' valida solo entorno/configuracion operativa.",
+    )
+    return parser
+
+
 def main() -> int:
+    args = parse_args().parse_args()
     issues: list[str] = []
 
     if not _is_expected_python():
@@ -101,24 +134,7 @@ def main() -> int:
             issues.append(f"No se pudo importar '{module_name}': {exc}")
 
     config = load_ingestion_config()
-
-    required_paths = [
-        PROJECT_ROOT / ".gitignore",
-        PROJECT_ROOT / "requirements.txt",
-        PROJECT_ROOT / "AGENTS.md",
-        PROJECT_ROOT / "BITACORA_ENTORNO.md",
-        CONFIG_DIR / "ingestion.toml",
-        NOTEBOOK_PATH,
-        KERNELSPEC_PATH,
-        DATA_DIR / "bronze",
-        DATA_DIR / "silver",
-        DATA_DIR / "gold",
-        LOGS_DIR / "ingestion",
-        *config.iter_required_dirs(),
-    ]
-    for path in required_paths:
-        if not path.exists():
-            issues.append(f"Falta la ruta requerida: {path}")
+    issues.extend(_check_required_paths(config))
 
     if KERNELSPEC_PATH.exists():
         kernel_payload = json.loads(KERNELSPEC_PATH.read_text(encoding="utf-8"))
@@ -127,8 +143,12 @@ def main() -> int:
                 f"{KERNELSPEC_PATH}: display_name debe ser '{EXPECTED_KERNEL_DISPLAY_NAME}'."
             )
 
-    issues.extend(_check_notebook())
-    issues.extend(_check_mojibake())
+    if args.scope == "project":
+        for path in (PROJECT_ROOT / "AGENTS.md", PROJECT_ROOT / "BITACORA_ENTORNO.md", NOTEBOOK_PATH):
+            if not path.exists():
+                issues.append(f"Falta la ruta requerida: {path}")
+        issues.extend(_check_notebook())
+        issues.extend(_check_mojibake())
 
     if issues:
         print("Project validation failed:")
@@ -137,6 +157,7 @@ def main() -> int:
         return 1
 
     print("Project validation passed.")
+    print(f"- Scope: {args.scope}")
     print(f"- Python: {sys.executable}")
     print(f"- Kernel: {EXPECTED_KERNEL_DISPLAY_NAME}")
     print(f"- MatchHistory raw dir: {config.raw_dir}")

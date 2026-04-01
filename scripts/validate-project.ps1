@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param()
+param(
+    [ValidateSet("project", "runtime")]
+    [string]$Scope = "project"
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -18,7 +21,7 @@ if ([string]::IsNullOrWhiteSpace($env:PYTHONPATH)) {
     $env:PYTHONPATH = "$srcPath;$($env:PYTHONPATH)"
 }
 
-& $venvPython -m football_ml.validate
+& $venvPython -m football_ml.validate --scope $Scope
 if ($LASTEXITCODE -ne 0) {
     throw "La validacion del proyecto fallo. Revisa la salida previa para el detalle."
 }

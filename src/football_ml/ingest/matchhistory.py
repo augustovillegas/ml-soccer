@@ -4,9 +4,10 @@ from argparse import ArgumentParser
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import hashlib
 from pathlib import Path
 import shutil
-import hashlib
+import tempfile
 
 import pandas as pd
 import soccerdata as sd
@@ -26,6 +27,11 @@ class SourceCandidate:
     source_path: Path
     source_url: str | None = None
     source_file: str | None = None
+    cleanup_dir: Path | None = None
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def read_csv_with_fallback(path: Path) -> tuple[pd.DataFrame, str]:
@@ -73,12 +79,27 @@ def is_provider_error(exc: Exception) -> bool:
     )
 
 
+def infer_saved_at(previous_manifest: dict[str, object], canonical_path: Path) -> str | None:
+    saved_at = previous_manifest.get("saved_at_utc")
+    if isinstance(saved_at, str) and saved_at:
+        return saved_at
+    if canonical_path.exists():
+        return datetime.fromtimestamp(canonical_path.stat().st_mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return None
+
+
 def build_manual_candidate(config: MatchHistoryConfig, season: str) -> SourceCandidate:
-    source_path = config.inbox_dir / config.canonical_filename(season)
-    if not source_path.exists():
+    source_path: Path | None = None
+    for filename in config.manual_fallback_candidates(season):
+        candidate_path = config.inbox_dir / filename
+        if candidate_path.exists():
+            source_path = candidate_path
+            break
+
+    if source_path is None:
         raise FileNotFoundError(
             "No hay CSV manual disponible para el fallback. "
-            f"Coloca '{source_path.name}' en '{config.inbox_dir}'."
+            f"Coloca '{config.manual_fallback_filename(season)}' en '{config.inbox_dir}'."
         )
     return SourceCandidate(
         season=season,
@@ -88,75 +109,74 @@ def build_manual_candidate(config: MatchHistoryConfig, season: str) -> SourceCan
     )
 
 
-def download_candidate(config: MatchHistoryConfig, season: str) -> SourceCandidate:
+def _expected_provider_url(config: MatchHistoryConfig, season: str, data_dir: Path) -> tuple[str, str]:
     reader = sd.MatchHistory(
         leagues=config.league,
         seasons=[season],
-        data_dir=config.raw_dir,
+        data_dir=data_dir,
     )
     league_code = reader._selected_leagues[config.league]
-    source_url = PROVIDER_URL_MASK.format(season=season, league_code=league_code)
-    cache_path = config.raw_dir / f"{league_code}_{season}.csv"
-    reader.read_games()
-
-    if not cache_path.exists():
-        raise FileNotFoundError(f"Se esperaba el archivo descargado '{cache_path}', pero no existe.")
-
-    return SourceCandidate(
-        season=season,
-        mode="soccerdata_matchhistory",
-        source_path=cache_path,
-        source_url=source_url,
-    )
+    return PROVIDER_URL_MASK.format(season=season, league_code=league_code), league_code
 
 
-def acquire_source(config: MatchHistoryConfig, season: str, logger) -> SourceCandidate:
+def download_candidate(config: MatchHistoryConfig, season: str) -> SourceCandidate:
+    temp_dir = Path(tempfile.mkdtemp(prefix="football-ml-matchhistory-"))
     try:
-        logger.info("Intentando descarga automatica para la temporada %s.", season)
-        return download_candidate(config, season)
-    except Exception as exc:
-        if not is_provider_error(exc):
-            raise
-        logger.warning(
-            "Fallo la descarga automatica para %s (%s). Se intentara el fallback manual.",
-            season,
-            exc,
+        source_url, league_code = _expected_provider_url(config, season, temp_dir)
+        reader = sd.MatchHistory(
+            leagues=config.league,
+            seasons=[season],
+            data_dir=temp_dir,
         )
-        return build_manual_candidate(config, season)
+        cache_path = temp_dir / f"{league_code}_{season}.csv"
+        reader.read_games()
+
+        if not cache_path.exists():
+            raise FileNotFoundError(f"Se esperaba el archivo descargado '{cache_path}', pero no existe.")
+
+        return SourceCandidate(
+            season=season,
+            mode="soccerdata_matchhistory",
+            source_path=cache_path,
+            source_url=source_url,
+            cleanup_dir=temp_dir,
+        )
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
 
 
 def build_manifest(
     *,
     config: MatchHistoryConfig,
     season: str,
-    source_candidate: SourceCandidate | None,
-    canonical_path: Path,
-    row_count: int,
-    column_count: int,
-    sha256: str,
     status: str,
-    source_mode: str | None = None,
+    source_mode: str,
+    canonical_path: Path,
+    last_checked_at_utc: str,
+    saved_at_utc: str | None,
+    row_count: int | None,
+    column_count: int | None,
+    sha256: str | None,
+    previous_sha256: str | None,
     source_url: str | None = None,
     source_file: str | None = None,
 ) -> dict[str, object]:
-    payload: dict[str, object] = {
+    return {
         "league": config.league,
         "season": season,
-        "source_mode": source_mode or (source_candidate.mode if source_candidate else "existing_local"),
-        "saved_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "status": status,
+        "source_mode": source_mode,
+        "source_url": source_url,
+        "source_file": source_file,
+        "last_checked_at_utc": last_checked_at_utc,
+        "saved_at_utc": saved_at_utc,
         "row_count": row_count,
         "column_count": column_count,
         "sha256": sha256,
-        "status": status,
+        "previous_sha256": previous_sha256,
         "canonical_file": str(relative_to_project(canonical_path)),
     }
-    resolved_source_url = source_url or (source_candidate.source_url if source_candidate else None)
-    resolved_source_file = source_file or (source_candidate.source_file if source_candidate else None)
-    if resolved_source_url:
-        payload["source_url"] = resolved_source_url
-    if resolved_source_file:
-        payload["source_file"] = resolved_source_file
-    return payload
 
 
 def ensure_directories(config: MatchHistoryConfig) -> None:
@@ -164,29 +184,15 @@ def ensure_directories(config: MatchHistoryConfig) -> None:
         ensure_dir(path)
 
 
-def process_existing_canonical(config: MatchHistoryConfig, season: str, logger) -> dict[str, object]:
-    canonical_path = config.canonical_csv_path(season)
-    manifest_path = config.manifest_path(season)
-    dataframe, _ = read_csv_with_fallback(canonical_path)
-    validate_required_columns(dataframe, canonical_path, config.required_columns)
-    checksum = sha256_file(canonical_path)
-    previous_manifest = load_manifest(manifest_path)
-    payload = build_manifest(
-        config=config,
-        season=season,
-        source_candidate=None,
-        canonical_path=canonical_path,
-        row_count=len(dataframe),
-        column_count=len(dataframe.columns),
-        sha256=checksum,
-        status="skipped",
-        source_mode=str(previous_manifest.get("source_mode", "existing_local")),
-        source_url=previous_manifest.get("source_url"),
-        source_file=previous_manifest.get("source_file"),
-    )
-    write_manifest(manifest_path, payload)
-    logger.info("Temporada %s omitida: ya existe '%s'.", season, relative_to_project(canonical_path))
-    return payload
+def cleanup_candidate(candidate: SourceCandidate) -> None:
+    if candidate.cleanup_dir:
+        shutil.rmtree(candidate.cleanup_dir, ignore_errors=True)
+
+
+def canonical_checksum(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return sha256_file(path)
 
 
 def process_source_candidate(
@@ -194,51 +200,181 @@ def process_source_candidate(
     season: str,
     candidate: SourceCandidate,
     logger,
+    previous_manifest: dict[str, object],
+    force_write: bool,
 ) -> dict[str, object]:
     canonical_path = config.canonical_csv_path(season)
     manifest_path = config.manifest_path(season)
+    checked_at = utc_now()
+    current_checksum = canonical_checksum(canonical_path)
 
     dataframe, encoding = read_csv_with_fallback(candidate.source_path)
     validate_required_columns(dataframe, candidate.source_path, config.required_columns)
 
     source_checksum = sha256_file(candidate.source_path)
-    status = "written"
+    if candidate.mode == "soccerdata_matchhistory":
+        updated_status = "updated_remote"
+        no_change_status = "no_change_remote"
+    else:
+        updated_status = "updated_manual"
+        no_change_status = "no_change_manual"
 
-    if canonical_path.exists() and sha256_file(canonical_path) == source_checksum:
-        status = "skipped"
+    if canonical_path.exists() and current_checksum == source_checksum and not force_write:
+        status = no_change_status
+        saved_at = infer_saved_at(previous_manifest, canonical_path)
         logger.info(
-            "Temporada %s omitida: '%s' no cambio respecto del archivo canonico.",
+            "Temporada %s sin cambios desde '%s'. Se conserva '%s'.",
             season,
             relative_to_project(candidate.source_path),
+            relative_to_project(canonical_path),
         )
     else:
         shutil.copyfile(candidate.source_path, canonical_path)
+        status = updated_status
+        saved_at = checked_at
         logger.info(
-            "Temporada %s guardada desde '%s' hacia '%s' (encoding detectado: %s).",
+            "Temporada %s actualizada desde '%s' hacia '%s' (encoding detectado: %s).",
             season,
             relative_to_project(candidate.source_path),
             relative_to_project(canonical_path),
             encoding,
         )
 
-    checksum = sha256_file(canonical_path)
     payload = build_manifest(
         config=config,
         season=season,
-        source_candidate=candidate,
+        status=status,
+        source_mode=candidate.mode,
         canonical_path=canonical_path,
+        last_checked_at_utc=checked_at,
+        saved_at_utc=saved_at,
         row_count=len(dataframe),
         column_count=len(dataframe.columns),
-        sha256=checksum,
-        status=status,
+        sha256=source_checksum,
+        previous_sha256=current_checksum,
+        source_url=candidate.source_url,
+        source_file=candidate.source_file,
     )
     write_manifest(manifest_path, payload)
     return payload
 
 
+def process_provider_unavailable_keep_current(
+    config: MatchHistoryConfig,
+    season: str,
+    previous_manifest: dict[str, object],
+    logger,
+    source_url: str,
+) -> dict[str, object]:
+    canonical_path = config.canonical_csv_path(season)
+    manifest_path = config.manifest_path(season)
+    dataframe, _ = read_csv_with_fallback(canonical_path)
+    validate_required_columns(dataframe, canonical_path, config.required_columns)
+    current_checksum = sha256_file(canonical_path)
+
+    payload = build_manifest(
+        config=config,
+        season=season,
+        status="provider_unavailable_keep_current",
+        source_mode=str(previous_manifest.get("source_mode", "existing_local")),
+        canonical_path=canonical_path,
+        last_checked_at_utc=utc_now(),
+        saved_at_utc=infer_saved_at(previous_manifest, canonical_path),
+        row_count=len(dataframe),
+        column_count=len(dataframe.columns),
+        sha256=current_checksum,
+        previous_sha256=current_checksum,
+        source_url=source_url,
+        source_file=previous_manifest.get("source_file"),
+    )
+    write_manifest(manifest_path, payload)
+    logger.warning(
+        "Temporada %s mantiene el CSV canonico existente por indisponibilidad temporal del proveedor.",
+        season,
+    )
+    return payload
+
+
+def process_failed_no_source(
+    config: MatchHistoryConfig,
+    season: str,
+    previous_manifest: dict[str, object],
+    logger,
+    source_url: str,
+) -> None:
+    canonical_path = config.canonical_csv_path(season)
+    manifest_path = config.manifest_path(season)
+    manual_file = str(relative_to_project(config.inbox_dir / config.manual_fallback_filename(season)))
+    payload = build_manifest(
+        config=config,
+        season=season,
+        status="failed_no_source",
+        source_mode="none",
+        canonical_path=canonical_path,
+        last_checked_at_utc=utc_now(),
+        saved_at_utc=previous_manifest.get("saved_at_utc"),
+        row_count=None,
+        column_count=None,
+        sha256=None,
+        previous_sha256=previous_manifest.get("sha256"),
+        source_url=source_url,
+        source_file=manual_file,
+    )
+    write_manifest(manifest_path, payload)
+    logger.error(
+        "Temporada %s fallo: no hay fuente remota utilizable ni CSV manual en inbox.",
+        season,
+    )
+    raise FileNotFoundError(
+        "No hay CSV manual disponible para el fallback. "
+        f"Coloca '{config.manual_fallback_filename(season)}' en '{config.inbox_dir}'."
+    )
+
+
+def refresh_season(
+    config: MatchHistoryConfig,
+    season: str,
+    logger,
+    force_write: bool,
+) -> dict[str, object]:
+    canonical_path = config.canonical_csv_path(season)
+    manifest_path = config.manifest_path(season)
+    previous_manifest = load_manifest(manifest_path)
+    source_url, _ = _expected_provider_url(config, season, config.raw_dir)
+
+    try:
+        candidate = download_candidate(config, season)
+        try:
+            return process_source_candidate(config, season, candidate, logger, previous_manifest, force_write)
+        finally:
+            cleanup_candidate(candidate)
+    except Exception as exc:
+        if not is_provider_error(exc):
+            raise
+
+        logger.warning(
+            "Fallo la descarga automatica para %s (%s). Se intentara el fallback manual.",
+            season,
+            exc,
+        )
+
+        try:
+            candidate = build_manual_candidate(config, season)
+            return process_source_candidate(config, season, candidate, logger, previous_manifest, force_write)
+        except FileNotFoundError:
+            if canonical_path.exists():
+                return process_provider_unavailable_keep_current(config, season, previous_manifest, logger, source_url)
+            process_failed_no_source(config, season, previous_manifest, logger, source_url)
+            raise
+
+
 def parse_args() -> ArgumentParser:
-    parser = ArgumentParser(description="Ingesta bronze de MatchHistory con fallback manual.")
-    parser.add_argument("--force", action="store_true", help="Reintenta la temporada aunque ya exista el CSV canonico.")
+    parser = ArgumentParser(description="Ingesta bronze de MatchHistory con refresh y fallback manual.")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Sobrescribe el CSV canonico aunque el checksum no haya cambiado.",
+    )
     parser.add_argument("--seasons", nargs="+", help="Lista de temporadas a procesar. Ejemplo: 2122 2223 2324.")
     return parser
 
@@ -250,19 +386,13 @@ def main() -> int:
     logger, log_path = configure_logger("ingest-matchhistory")
 
     ensure_directories(config)
-    logger.info("Iniciando ingesta MatchHistory. Log: %s", log_path)
+    logger.info("Iniciando refresh MatchHistory. Log: %s", log_path)
     logger.info("Liga configurada: %s | Temporadas: %s | Modo: %s", config.league, seasons, config.mode)
 
     results: list[dict[str, object]] = []
     try:
         for season in seasons:
-            canonical_path = config.canonical_csv_path(season)
-            if canonical_path.exists() and not args.force:
-                results.append(process_existing_canonical(config, season, logger))
-                continue
-
-            candidate = acquire_source(config, season, logger)
-            results.append(process_source_candidate(config, season, candidate, logger))
+            results.append(refresh_season(config, season, logger, args.force))
     except Exception as exc:
         logger.exception("La ingesta fallo: %s", exc)
         print(f"Ingestion failed. Revisa el log: {log_path}")
@@ -281,4 +411,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

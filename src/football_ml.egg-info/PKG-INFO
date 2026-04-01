@@ -1,3 +1,15 @@
+Metadata-Version: 2.4
+Name: football-ml
+Version: 0.1.0
+Summary: Automation and data workflows for football-ml.
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: soccerdata==1.8.8
+Requires-Dist: pandas==2.3.3
+Requires-Dist: pyarrow==23.0.1
+Requires-Dist: jupyter==1.1.1
+Requires-Dist: notebook==7.5.5
+
 ﻿# Bitacora de entorno y comandos
 
 Este documento registra, en orden cronologico y metodologico, los comandos correctos que funcionaron para dejar listo este proyecto en Windows PowerShell.

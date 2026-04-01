@@ -1,9 +1,12 @@
 [matchhistory]
 league = "ENG-Premier League"
 seasons = ["2122", "2223", "2324"]
-mode = "hybrid"
+mode = "refresh_hybrid"
 raw_dir = "data/bronze/matchhistory/raw"
 inbox_dir = "data/bronze/matchhistory/inbox"
 manifest_dir = "data/bronze/matchhistory/manifests"
 required_columns = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"]
 
+[automation]
+task_name = "football-ml-refresh-matchhistory"
+schedule_time = "09:00"

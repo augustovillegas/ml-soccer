@@ -30,6 +30,12 @@ class MatchHistoryConfig:
     def canonical_filename(self, season: str) -> str:
         return f"{self.league_slug}_{season}.csv"
 
+    def manual_fallback_filename(self, season: str) -> str:
+        return f"E0_{season}.csv"
+
+    def manual_fallback_candidates(self, season: str) -> tuple[str, ...]:
+        return (self.manual_fallback_filename(season), self.canonical_filename(season))
+
     def canonical_csv_path(self, season: str) -> Path:
         return self.raw_dir / self.canonical_filename(season)
 
@@ -38,6 +44,12 @@ class MatchHistoryConfig:
 
     def iter_required_dirs(self) -> tuple[Path, ...]:
         return (self.raw_dir, self.inbox_dir, self.manifest_dir)
+
+
+@dataclass(frozen=True)
+class AutomationConfig:
+    task_name: str
+    schedule_time: str
 
 
 def load_ingestion_config(config_path: Path | None = None) -> MatchHistoryConfig:
@@ -56,9 +68,19 @@ def load_ingestion_config(config_path: Path | None = None) -> MatchHistoryConfig
     )
 
 
+def load_automation_config(config_path: Path | None = None) -> AutomationConfig:
+    config_file = config_path or (CONFIG_DIR / "ingestion.toml")
+    payload = tomllib.loads(config_file.read_text(encoding="utf-8"))
+    data = payload["automation"]
+
+    return AutomationConfig(
+        task_name=data["task_name"],
+        schedule_time=data["schedule_time"],
+    )
+
+
 def _resolve_project_path(raw_path: str) -> Path:
     path = Path(raw_path)
     if path.is_absolute():
         return path
     return PROJECT_ROOT / path
-
