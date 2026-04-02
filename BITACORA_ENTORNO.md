@@ -375,3 +375,43 @@ Nota operativa:
 
 - `bootstrap.ps1` instala automaticamente el paquete local en editable.
 - El workspace tambien fija `.\.venv\Scripts\python.exe` y `src` en `.vscode\settings.json` para que el analizador del editor deje de marcar `football_ml` como no resuelto.
+
+### 21. Adaptar el notebook de exploracion a un flujo simple y escalable
+
+Cambio aplicado:
+
+- Se rearmo `notebooks\01_explorer_matchhistory.ipynb` para trabajar en `dual mode`.
+- El notebook ahora empieza por `data\bronze\matchhistory\inbox\E0_<temporada>.csv` cuando existen archivos manuales y escala a `data\bronze\matchhistory\raw\eng_premier_league_<temporada>.csv` cuando ya corre la automatizacion.
+- La carga quedo separada en celdas progresivas: kernel, configuracion, seleccion de fuente, helper de lectura CSV, carga, resumen y auditoria basica.
+- El notebook ya no descarga nada ni usa `soccerdata`; solo consume datos locales del proyecto.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- El notebook vuelve a usar el kernel `football-ml (.venv)`.
+- La metadata ya no queda en `python3`.
+- La exploracion inicial puede empezar desde `inbox` y luego pasar a `raw` sin cambiar la estructura del notebook.
+
+### 22. Simplificar el notebook para un usuario principiante
+
+Cambio aplicado:
+
+- Se reescribio `notebooks\01_explorer_matchhistory.ipynb` con comentarios explicativos en cada bloque.
+- Se usaron nombres de variables mas claros y una progresion simple: imports, configuracion, rutas, lectura, carga, resumen y auditoria.
+- El notebook mantiene la logica `auto | inbox | raw`, pero con explicaciones pensadas para alguien que recien empieza.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- El notebook conserva el kernel `football-ml (.venv)`.
+- Las celdas siguen siendo validas y el flujo de lectura local continua funcionando.
