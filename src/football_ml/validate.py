@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser
+from football_ml.export_notebook_cells import check_generated_markdown_sync
 from importlib import import_module
 import json
 from pathlib import Path
@@ -11,6 +12,8 @@ from football_ml.config import load_ingestion_config
 from football_ml.paths import (
     CONFIG_DIR,
     DATA_DIR,
+    NOTEBOOK_CELLS_DOC_PATH,
+    NOTEBOOK_DOCS_DIR,
     EXPECTED_KERNEL_DISPLAY_NAME,
     EXPECTED_KERNEL_NAME,
     EXPECTED_PYTHON,
@@ -89,6 +92,10 @@ def _check_notebook() -> list[str]:
     return issues
 
 
+def _check_generated_notebook_doc() -> list[str]:
+    return check_generated_markdown_sync(NOTEBOOK_PATH, NOTEBOOK_CELLS_DOC_PATH)
+
+
 def _check_required_paths(config) -> list[str]:
     issues: list[str] = []
     required_paths = [
@@ -144,10 +151,17 @@ def main() -> int:
             )
 
     if args.scope == "project":
-        for path in (PROJECT_ROOT / "AGENTS.md", PROJECT_ROOT / "BITACORA_ENTORNO.md", NOTEBOOK_PATH):
+        for path in (
+            PROJECT_ROOT / "AGENTS.md",
+            PROJECT_ROOT / "BITACORA_ENTORNO.md",
+            NOTEBOOK_PATH,
+            NOTEBOOK_DOCS_DIR,
+            NOTEBOOK_CELLS_DOC_PATH,
+        ):
             if not path.exists():
                 issues.append(f"Falta la ruta requerida: {path}")
         issues.extend(_check_notebook())
+        issues.extend(_check_generated_notebook_doc())
         issues.extend(_check_mojibake())
 
     if issues:

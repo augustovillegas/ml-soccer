@@ -415,3 +415,28 @@ Resultado esperado:
 
 - El notebook conserva el kernel `football-ml (.venv)`.
 - Las celdas siguen siendo validas y el flujo de lectura local continua funcionando.
+
+### 23. Exportar el codigo de las celdas del notebook a Markdown
+
+Comando:
+
+```powershell
+.\scripts\export-notebook-cells.ps1
+```
+
+Objetivo:
+
+- Generar `docs\notebooks\01_explorer_matchhistory_cells.md` a partir de `notebooks\01_explorer_matchhistory.ipynb`.
+- Documentar el codigo de cada celda en orden, con una breve explicacion, sin incluir outputs ni metadata visual del notebook.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- Existe `docs\notebooks\01_explorer_matchhistory_cells.md`.
+- El archivo incluye el codigo de cada celda en orden y un marker interno con el notebook fuente.
+- Si cambia el notebook y no se regenera el Markdown, `validate-project.ps1 -Scope project` falla por documento desactualizado.

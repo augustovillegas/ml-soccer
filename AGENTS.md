@@ -14,7 +14,7 @@
 - No usar `pip` global ni asumir que el entorno esta activado.
 - Cuando se actualicen dependencias directas del proyecto, reflejarlas en `requirements.txt`.
 - Para notebooks de este proyecto, usar el kernel dedicado `football-ml (.venv)` en lugar del kernel generico `python3`.
-- Usar `.\scripts\bootstrap.ps1`, `.\scripts\validate-project.ps1`, `.\scripts\ingest-matchhistory.ps1` y `.\scripts\refresh-matchhistory.ps1` como interfaces oficiales del proyecto en Windows.
+- Usar `.\scripts\bootstrap.ps1`, `.\scripts\validate-project.ps1`, `.\scripts\ingest-matchhistory.ps1`, `.\scripts\refresh-matchhistory.ps1` y `.\scripts\export-notebook-cells.ps1` como interfaces oficiales del proyecto en Windows.
 
 ## Regla de mantenimiento de la bitacora
 
@@ -33,6 +33,8 @@
 
 - Los reportes de investigacion, analisis profundos de librerias, comparativas y documentos tecnicos de referencia deben guardarse en `docs/research`.
 - Los notebooks exploratorios van en `notebooks`; la documentacion tecnica no debe mezclarse con notebooks ni con datos.
+- La documentacion generada que replica o exporta codigo de notebooks debe guardarse en `docs/notebooks`.
+- Si cambia `notebooks/01_explorer_matchhistory.ipynb`, regenerar `docs/notebooks/01_explorer_matchhistory_cells.md` con `.\scripts\export-notebook-cells.ps1` antes de cerrar la tarea.
 
 ## Regla de consulta para soccerdata
 
