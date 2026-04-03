@@ -11,8 +11,9 @@ from football_ml.paths import NOTEBOOK_CELLS_DOC_PATH, NOTEBOOK_PATH, ensure_dir
 
 
 DEFAULT_EXPLANATION = "Codigo de la celda original sin cambios."
+DEFAULT_OUTPUT_TEXT = "Sin output guardado en el notebook."
 SOURCE_MARKER_PREFIX = "<!-- notebook-source: "
-HASH_MARKER_PREFIX = "<!-- notebook-code-cells-sha256: "
+HASH_MARKER_PREFIX = "<!-- notebook-code-and-outputs-sha256: "
 MARKER_SUFFIX = " -->"
 
 
@@ -48,9 +49,78 @@ def cell_source_text(cell: dict[str, object]) -> str:
     raise ValueError("La celda tiene un campo 'source' invalido.")
 
 
+def _text_from_notebook_value(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "".join(str(item) for item in value)
+    return str(value)
+
+
+def extract_cell_outputs(cell: dict[str, object]) -> list[str]:
+    rendered_outputs: list[str] = []
+    raw_outputs = cell.get("outputs", [])
+
+    if not isinstance(raw_outputs, list):
+        return rendered_outputs
+
+    for output in raw_outputs:
+        if not isinstance(output, dict):
+            continue
+
+        output_type = output.get("output_type")
+
+        if output_type == "stream":
+            text = _text_from_notebook_value(output.get("text", ""))
+            if text.strip():
+                rendered_outputs.append(text.rstrip())
+            continue
+
+        if output_type in {"display_data", "execute_result"}:
+            data = output.get("data", {})
+            if not isinstance(data, dict):
+                continue
+
+            if "text/plain" in data:
+                text = _text_from_notebook_value(data["text/plain"])
+                if text.strip():
+                    rendered_outputs.append(text.rstrip())
+                continue
+
+            if "text/markdown" in data:
+                text = _text_from_notebook_value(data["text/markdown"])
+                if text.strip():
+                    rendered_outputs.append(text.rstrip())
+                continue
+
+            if "application/json" in data:
+                text = json.dumps(data["application/json"], ensure_ascii=False, indent=2)
+                if text.strip():
+                    rendered_outputs.append(text.rstrip())
+                continue
+
+        if output_type == "error":
+            traceback = output.get("traceback")
+            if isinstance(traceback, list) and traceback:
+                rendered_outputs.append(_text_from_notebook_value(traceback).rstrip())
+                continue
+
+            ename = str(output.get("ename", "Error"))
+            evalue = str(output.get("evalue", "")).strip()
+            rendered_outputs.append(f"{ename}: {evalue}".rstrip(": ").rstrip())
+
+    return rendered_outputs
+
+
 def compute_notebook_code_cells_sha256(payload: dict[str, object]) -> str:
-    code_sources = [cell_source_text(cell) for cell in iter_code_cells(payload)]
-    content = json.dumps(code_sources, ensure_ascii=False)
+    code_and_outputs = [
+        {
+            "source": cell_source_text(cell),
+            "outputs": extract_cell_outputs(cell),
+        }
+        for cell in iter_code_cells(payload)
+    ]
+    content = json.dumps(code_and_outputs, ensure_ascii=False)
     return sha256(content.encode("utf-8")).hexdigest()
 
 
@@ -116,6 +186,7 @@ def render_markdown(notebook_path: Path, payload: dict[str, object]) -> str:
         cell_id = str(cell.get("id") or f"cell-{index}")
         source_text = cell_source_text(cell).rstrip()
         explanation = extract_cell_explanation(source_text)
+        output_texts = extract_cell_outputs(cell)
 
         sections.extend(
             [
@@ -129,6 +200,26 @@ def render_markdown(notebook_path: Path, payload: dict[str, object]) -> str:
                 "",
             ]
         )
+
+        if output_texts:
+            for output_index, output_text in enumerate(output_texts, start=1):
+                sections.extend(
+                    [
+                        f"**Output {output_index}:**",
+                        "",
+                        "```text",
+                        output_text,
+                        "```",
+                        "",
+                    ]
+                )
+        else:
+            sections.extend(
+                [
+                    f"**Output:** {DEFAULT_OUTPUT_TEXT}",
+                    "",
+                ]
+            )
 
     return "\n".join(sections).rstrip() + "\n"
 

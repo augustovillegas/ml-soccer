@@ -427,7 +427,7 @@ Comando:
 Objetivo:
 
 - Generar `docs\notebooks\01_explorer_matchhistory_cells.md` a partir de `notebooks\01_explorer_matchhistory.ipynb`.
-- Documentar el codigo de cada celda en orden, con una breve explicacion, sin incluir outputs ni metadata visual del notebook.
+- Documentar el codigo de cada celda en orden, con una breve explicacion y los outputs textuales guardados del notebook, sin incluir metadata visual ni HTML crudo.
 
 Verificacion minima:
 
@@ -438,5 +438,5 @@ Verificacion minima:
 Resultado esperado:
 
 - Existe `docs\notebooks\01_explorer_matchhistory_cells.md`.
-- El archivo incluye el codigo de cada celda en orden y un marker interno con el notebook fuente.
+- El archivo incluye el codigo de cada celda en orden, sus outputs textuales y un marker interno con el notebook fuente.
 - Si cambia el notebook y no se regenera el Markdown, `validate-project.ps1 -Scope project` falla por documento desactualizado.

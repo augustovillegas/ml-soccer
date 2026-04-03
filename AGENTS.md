@@ -34,6 +34,7 @@
 - Los reportes de investigacion, analisis profundos de librerias, comparativas y documentos tecnicos de referencia deben guardarse en `docs/research`.
 - Los notebooks exploratorios van en `notebooks`; la documentacion tecnica no debe mezclarse con notebooks ni con datos.
 - La documentacion generada que replica o exporta codigo de notebooks debe guardarse en `docs/notebooks`.
+- Esa documentacion generada debe incluir el codigo de las celdas y los outputs textuales guardados del notebook, sin depender de HTML crudo.
 - Si cambia `notebooks/01_explorer_matchhistory.ipynb`, regenerar `docs/notebooks/01_explorer_matchhistory_cells.md` con `.\scripts\export-notebook-cells.ps1` antes de cerrar la tarea.
 
 ## Regla de consulta para soccerdata
