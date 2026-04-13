@@ -23,8 +23,9 @@ Hoy el proyecto ya tiene estas piezas estables:
 - ingesta oficial fuera del notebook
 - refresh automatizado de `MatchHistory`
 - fallback manual con archivos `E0_<temporada>.csv` en `data/bronze/matchhistory/inbox`
-- notebook de exploracion que lee datos locales y no descarga desde internet
-- documentacion exportada del notebook con codigo y outputs
+- notebook `01` de exploracion que lee datos locales y no descarga desde internet
+- notebook `02` de transformacion `silver` que parte del Bronze local ya persistido
+- documentacion exportada de los notebooks oficiales con codigo y outputs
 
 En el estado actual, el notebook trabaja sobre datos locales y ya mostro:
 
@@ -57,14 +58,13 @@ Es la capa donde guardas:
 
 ### Notebook
 
-El notebook actual no es la ingesta oficial.
+Los notebooks oficiales no son la ingesta oficial.
 
 Su funcion correcta es:
 
-- cargar el dato local
-- entender la estructura del dataset
-- revisar columnas, tipos, nulos y consistencia
-- prototipar la transformacion hacia `silver`
+- `01`: cargar CSV locales, auditar el dataset y cerrar Bronze
+- `02`: leer el parquet Bronze local, derivar columnas para modelado y cerrar Silver
+- mantener un formato comun de bootstrap, encabezados numerados e IDs de celdas estables
 
 ### Silver
 
@@ -178,13 +178,13 @@ Cuando esa respuesta ya sea consistente, recien ahi conviene mover la logica a s
 La regla recomendada es:
 
 - en notebook prototipas
-- en script consolidás
+- en script consolidas
 
 ### No arrancar con todas las columnas de odds
 
 Primero defini una `silver` robusta con variables de partido.
 
-Despues, si realmente hace falta, armás:
+Despues, si realmente hace falta, armas:
 
 - una silver de odds
 - o una seleccion reducida de odds utiles
@@ -273,6 +273,28 @@ Podes pasar del notebook a script cuando se cumplan estas condiciones:
 - cuando la transformacion del notebook ya sea estable, moverla a script o modulo
 - recien ahi guardar en `data/silver`
 
+## Regla operativa para notebooks futuros
+
+Tomar `notebooks/01_explorer_matchhistory.ipynb` como referencia estructural para cualquier notebook oficial nuevo.
+
+Eso implica:
+
+- nombre `NN_<etapa>_<tema>.ipynb`
+- kernel `football-ml (.venv)`
+- primera celda con bootstrap comun del proyecto
+- celdas con encabezados numerados y comentario explicativo
+- IDs de celda descriptivos y estables
+- export obligatorio a `docs/notebooks/..._cells.md`
+- si cambia codigo u output guardado del notebook, el export Markdown debe regenerarse
+- validacion final con `.\scripts\validate-project.ps1 -Scope project`
+
+## Nota de escalado
+
+- Mientras `silver` siga exploratoria, `notebooks/02_silver_matchhistory.ipynb` puede seguir escribiendo `data/silver/matches_silver.parquet`.
+- Ese archivo en la raiz de `data/silver` se considera una excepcion transitoria documentada.
+- Cuando aparezca un segundo dataset `silver` oficial o un segundo consumidor de la transformacion, la ownership debe migrar a `src/football_ml/` + `scripts/*` y los datasets nuevos deben ir bajo un namespace de dominio.
+- La referencia operativa para estas reglas es [reglas-escalado-seguro.md](./reglas-escalado-seguro.md).
+
 ## Nota sobre odds recientes
 
 La fuente oficial de `football-data.co.uk` advierte que desde el **23 de julio de 2025** la API publica de Pinnacle se volvio poco confiable.
@@ -283,8 +305,10 @@ Eso no invalida `MatchHistory`, pero si obliga a tratar con mas cuidado cualquie
 
 - Referencia interna principal sobre `soccerdata`: [../research/soccer-deep-research-report.md](../research/soccer-deep-research-report.md)
 - Estado operativo del proyecto: [../../BITACORA_ENTORNO.md](../../BITACORA_ENTORNO.md)
-- Notebook actual: [../../notebooks/01_explorer_matchhistory.ipynb](../../notebooks/01_explorer_matchhistory.ipynb)
-- Export del notebook: [../notebooks/01_explorer_matchhistory_cells.md](../notebooks/01_explorer_matchhistory_cells.md)
+- Notebook `01` de referencia: [../../notebooks/01_explorer_matchhistory.ipynb](../../notebooks/01_explorer_matchhistory.ipynb)
+- Export `01`: [../notebooks/01_explorer_matchhistory_cells.md](../notebooks/01_explorer_matchhistory_cells.md)
+- Notebook `02` oficial: [../../notebooks/02_silver_matchhistory.ipynb](../../notebooks/02_silver_matchhistory.ipynb)
+- Export `02`: [../notebooks/02_silver_matchhistory_cells.md](../notebooks/02_silver_matchhistory_cells.md)
 - Documentacion oficial de `MatchHistory`: [soccerdata MatchHistory](https://soccerdata.readthedocs.io/en/stable/reference/matchhistory.html)
 - Cobertura general de la fuente: [football-data main page](https://www.football-data.co.uk/data.php)
 - Cobertura oficial de Inglaterra al 2 de abril de 2026: [football-data England page](https://www.football-data.co.uk/englandm.php)

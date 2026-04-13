@@ -13,6 +13,9 @@ MATCHHISTORY_DIR = DATA_DIR / "bronze" / "matchhistory"
 MATCHHISTORY_RAW_DIR = MATCHHISTORY_DIR / "raw"
 MATCHHISTORY_INBOX_DIR = MATCHHISTORY_DIR / "inbox"
 MATCHHISTORY_MANIFEST_DIR = MATCHHISTORY_DIR / "manifests"
+MATCHHISTORY_SILVER_DIR = DATA_DIR / "silver" / "matchhistory"
+MATCHHISTORY_BRONZE_PARQUET_PATH = MATCHHISTORY_RAW_DIR / "matches_bronze.parquet"
+MATCHHISTORY_SILVER_PARQUET_PATH = DATA_DIR / "silver" / "matches_silver.parquet"
 EXPECTED_PYTHON = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
 EXPECTED_KERNEL_NAME = "football-ml"
 EXPECTED_KERNEL_DISPLAY_NAME = "football-ml (.venv)"
@@ -22,16 +25,91 @@ EXPECTED_KERNEL_DISPLAY_NAME = "football-ml (.venv)"
 class ManagedNotebook:
     notebook_path: Path
     doc_path: Path
+    expected_cell_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ManagedDataset:
+    dataset_id: str
+    stage: str
+    domain: str
+    path: Path
+    required_columns: tuple[str, ...]
+    unique_key: tuple[str, ...]
+    update_policy: str
+    allow_stage_root_file: bool = False
+    transition_note: str | None = None
 
 
 MANAGED_NOTEBOOKS = (
     ManagedNotebook(
         notebook_path=PROJECT_ROOT / "notebooks" / "01_explorer_matchhistory.ipynb",
         doc_path=NOTEBOOK_DOCS_DIR / "01_explorer_matchhistory_cells.md",
+        expected_cell_ids=(
+            "imports-and-kernel-check",
+            "config-and-source-selection",
+            "build-file-map",
+            "csv-reader-helper",
+            "load-loop",
+            "concat-and-summary",
+            "basic-audit",
+            "bronze-final-selection",
+            "bronze-parquet-write",
+        ),
     ),
     ManagedNotebook(
         notebook_path=PROJECT_ROOT / "notebooks" / "02_silver_matchhistory.ipynb",
         doc_path=NOTEBOOK_DOCS_DIR / "02_silver_matchhistory_cells.md",
+        expected_cell_ids=(
+            "imports-and-kernel-check",
+            "bronze-parquet-load",
+            "game-key-derivation",
+            "bet365-probability-normalization",
+            "target-encoding",
+            "silver-build-and-write",
+            "silver-summary",
+        ),
+    ),
+)
+
+MANAGED_DATASETS = (
+    ManagedDataset(
+        dataset_id="matchhistory_bronze_matches",
+        stage="bronze",
+        domain="matchhistory",
+        path=MATCHHISTORY_BRONZE_PARQUET_PATH,
+        required_columns=(
+            "Date",
+            "HomeTeam",
+            "AwayTeam",
+            "season",
+            "league",
+            "FTR",
+            "FTHG",
+            "FTAG",
+        ),
+        unique_key=("Date", "HomeTeam", "AwayTeam", "season"),
+        update_policy="exploratory_notebook_owner_until_script_promotion",
+    ),
+    ManagedDataset(
+        dataset_id="matchhistory_silver_matches",
+        stage="silver",
+        domain="matchhistory",
+        path=MATCHHISTORY_SILVER_PARQUET_PATH,
+        required_columns=(
+            "game_key",
+            "Date",
+            "season",
+            "league",
+            "HomeTeam",
+            "AwayTeam",
+            "FTR",
+            "target",
+        ),
+        unique_key=("game_key",),
+        update_policy="exploratory_notebook_owner_until_second_consumer",
+        allow_stage_root_file=True,
+        transition_note="Excepcion transitoria: matches_silver.parquet permanece en data/silver hasta que exista un segundo dataset silver oficial.",
     ),
 )
 
@@ -54,6 +132,10 @@ def managed_notebook_paths() -> tuple[Path, ...]:
 
 def managed_notebook_doc_paths() -> tuple[Path, ...]:
     return tuple(entry.doc_path for entry in MANAGED_NOTEBOOKS)
+
+
+def iter_managed_datasets() -> tuple[ManagedDataset, ...]:
+    return MANAGED_DATASETS
 
 
 def relative_to_project(path: Path) -> Path:

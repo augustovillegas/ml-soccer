@@ -1,5 +1,0 @@
-soccerdata==1.8.8
-pandas==2.3.3
-pyarrow==23.0.1
-jupyter==1.1.1
-notebook==7.5.5

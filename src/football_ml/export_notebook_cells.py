@@ -24,7 +24,7 @@ MARKER_SUFFIX = " -->"
 
 
 def parse_args() -> ArgumentParser:
-    parser = ArgumentParser(description="Exporta las celdas de codigo del notebook principal a Markdown.")
+    parser = ArgumentParser(description="Exporta las celdas de codigo de notebooks oficiales gestionados a Markdown.")
     parser.add_argument("--notebook-path", help="Ruta al notebook fuente.")
     parser.add_argument("--output-path", help="Ruta del Markdown generado.")
     parser.add_argument(

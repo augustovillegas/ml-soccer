@@ -304,7 +304,7 @@ Comando:
 Resultado esperado:
 
 - `.gitignore` existe y protege entornos, checkpoints, logs y datos locales.
-- El notebook principal usa el kernel `football-ml (.venv)` y no intenta scrapear datos online.
+- Los notebooks oficiales usan el kernel `football-ml (.venv)` y no intentan scrapear datos online.
 - Las rutas oficiales de `bronze` y `logs` existen.
 - No quedan mojibakes visibles en archivos fuente controlados.
 
@@ -483,7 +483,7 @@ Verificacion minima:
 Resultado esperado:
 
 - Existe `notebooks\02_silver_matchhistory.ipynb`.
-- El notebook usa el kernel `football-ml (.venv)` y reutiliza el mismo bootstrap local de `01_explorer_matchhistory.ipynb`.
+- El notebook usa el kernel `football-ml (.venv)` y reutiliza el mismo bootstrap comun de `01_explorer_matchhistory.ipynb`.
 - Existe `docs\notebooks\02_silver_matchhistory_cells.md`.
 - La validacion del proyecto revisa ambos notebooks oficiales y falla si alguno queda desactualizado respecto de su respaldo Markdown.
 
@@ -494,11 +494,149 @@ Receta manual reproducible:
 ```
 
 1. Abrir Jupyter Notebook con el entorno del proyecto y seleccionar el kernel `football-ml (.venv)` para el archivo nuevo `notebooks\02_silver_matchhistory.ipynb`.
-2. Copiar el bootstrap operativo de `notebooks\01_explorer_matchhistory.ipynb`: validacion del interprete, deteccion de `PROJECT_ROOT`, carga de `load_ingestion_config`, resolucion de `inbox/raw`, helper `read_local_csv` y construccion de `df_raw`.
-3. Guardar el notebook nuevo sin mover la ingesta al notebook ni agregar llamadas online a `MatchHistory`.
+2. Copiar del notebook `01` solo el bootstrap comun: validacion del interprete, deteccion de `PROJECT_ROOT`, `EXPECTED_PYTHON`, chequeo del kernel y opciones de display.
+3. Guardar el notebook nuevo sin mover la ingesta al notebook ni agregar llamadas online a `MatchHistory`; cada notebook mantiene la logica de su propia capa.
 4. Ejecutar `.\scripts\export-notebook-cells.ps1` para generar o actualizar el respaldo `docs\notebooks\02_silver_matchhistory_cells.md`.
 5. Ejecutar `.\scripts\validate-project.ps1 -Scope project` para comprobar kernel, sincronia de respaldos y revision anti-mojibake.
 
 Nota de correccion:
 
 - Antes el flujo oficial de exportacion y validacion estaba hardcodeado solo para `01_explorer_matchhistory.ipynb`; ahora contempla tambien `02_silver_matchhistory.ipynb` dentro de la lista oficial de notebooks gestionados.
+
+### 26. Alinear el notebook `02` con el estandar de `01` y fijar reglas permanentes
+
+Comandos:
+
+```powershell
+.\scripts\export-notebook-cells.ps1
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Objetivo:
+
+- Reescribir `notebooks\02_silver_matchhistory.ipynb` con encabezados numerados estilo `01`, IDs de celdas estables y bootstrap comun del proyecto.
+- Renombrar los IDs aleatorios pendientes de `notebooks\01_explorer_matchhistory.ipynb`.
+- Dejar reglas persistentes en `AGENTS.md`, `docs\guides\como-continuar-etl.md` y `src\football_ml\validate.py` para que futuros notebooks oficiales sigan el mismo patron.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- `01_explorer_matchhistory.ipynb` y `02_silver_matchhistory.ipynb` usan IDs descriptivos y estables.
+- `02_silver_matchhistory.ipynb` mantiene su logica Silver pero adopta el formato comun de `01`.
+- `docs\notebooks\01_explorer_matchhistory_cells.md` y `docs\notebooks\02_silver_matchhistory_cells.md` quedan sincronizados.
+- La validacion falla si un notebook oficial no respeta nombre, bootstrap, encabezados, IDs o sincronizacion con su Markdown exportado.
+
+### 27. Saneamiento integral del repo y retiro de `egg-info` del versionado
+
+Comandos:
+
+```powershell
+.\scripts\export-notebook-cells.ps1
+.\scripts\validate-project.ps1 -Scope project
+.\.venv\Scripts\python.exe -m pip install -e .
+git rm -r --cached src\football_ml.egg-info
+```
+
+Objetivo:
+
+- Resincronizar los respaldos Markdown oficiales con los outputs guardados reales de los notebooks.
+- Ajustar la validacion y la documentacion para el flujo multi-notebook oficial.
+- Dejar `src\football_ml.egg-info` como artefacto generado local y no como fuente versionada del proyecto.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+git status --short
+```
+
+Resultado esperado:
+
+- `docs\notebooks\02_silver_matchhistory_cells.md` refleja el hash y los outputs actuales del notebook `02`.
+- La validacion ignora `*.egg-info` como artefacto generado y sigue controlando notebooks, docs y codigo fuente.
+- `git status --short` deja de mostrar `src\football_ml.egg-info\*` como parte del estado mantenido del repositorio.
+
+### 28. Reforzar la regla de verificacion anti-mojibake como control general de cierre
+
+Comando:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Objetivo:
+
+- Dejar explicito en `AGENTS.md` que la revision anti-mojibake es obligatoria antes de cerrar cualquier tarea, no solo cambios documentales o de notebooks.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- `AGENTS.md` exige revisar mojibakes visibles en todos los archivos fuente modificados antes de cerrar una tarea.
+- La regla aplica como control general de cierre del trabajo y no solo a documentacion o notebooks.
+
+### 29. Personalizar la regla para que cada cambio actualice secciones impactadas y cierre con chequeo anti-mojibake
+
+Comando:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Objetivo:
+
+- Dejar explicito en `AGENTS.md` que cada cambio del proyecto debe mantener alineadas todas las secciones impactadas.
+- Fijar que el chequeo anti-mojibake es obligatorio en cada cambio realizado y forma parte del cierre del trabajo.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- `AGENTS.md` obliga a actualizar codigo, notebooks, exports, guias, reglas y bitacora cuando el cambio los impacta.
+- Ningun cambio se considera cerrado si alguna seccion afectada queda desalineada o si no se hizo la revision final anti-mojibake.
+
+### 30. Agregar reglas de escalado seguro, contratos de dataset y tests offline
+
+Comandos:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+.\.venv\Scripts\python.exe -m pytest
+git rm --cached notebooks\.ipynb_checkpoints\01_explorer_matchhistory-checkpoint.ipynb
+```
+
+Objetivo:
+
+- Registrar reglas operativas de escalado en `AGENTS.md` y en `docs\guides\reglas-escalado-seguro.md`.
+- Definir contratos minimos de datasets oficiales en `src\football_ml\paths.py`.
+- Ampliar `src\football_ml\validate.py` para revisar contratos de dataset y artefactos generados versionados por error.
+- Crear `tests\` con pruebas offline de contratos, utilidades y fallback de ingesta.
+- Sacar del versionado el checkpoint trackeado del notebook.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+.\.venv\Scripts\python.exe -m pytest
+git status --short
+```
+
+Resultado esperado:
+
+- Existen contratos oficiales de dataset para Bronze y Silver.
+- La validacion falla si reaparece un `.ipynb_checkpoints`, `*.egg-info`, `.pytest_cache`, datos versionados o logs versionados por error.
+- `tests\` ejecuta pruebas offline y smoke tests locales sin depender de internet.
+- El checkpoint `notebooks\.ipynb_checkpoints\01_explorer_matchhistory-checkpoint.ipynb` deja de formar parte del repositorio.

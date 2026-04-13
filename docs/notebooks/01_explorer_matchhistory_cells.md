@@ -497,7 +497,7 @@ season
 2324        380
 ```
 
-## Cell 8 - 95d316a7
+## Cell 8 - bronze-final-selection
 
 **Explicacion:** 14. Cerrar Bronze y guardar Convertir fecha de texto a datetime real dayfirst=True porque el formato es DD/MM/YYYY
 
@@ -562,7 +562,7 @@ Tipo Date: datetime64[ns]
 2   2.45 3.30 3.12 2.51
 ```
 
-## Cell 9 - f9759c81
+## Cell 9 - bronze-parquet-write
 
 **Explicacion:** 15. Guardar parquet Bronze
 
