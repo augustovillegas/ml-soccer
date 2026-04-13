@@ -440,3 +440,23 @@ Resultado esperado:
 - Existe `docs\notebooks\01_explorer_matchhistory_cells.md`.
 - El archivo incluye el codigo de cada celda en orden, sus outputs textuales y un marker interno con el notebook fuente.
 - Si cambia el notebook y no se regenera el Markdown, `validate-project.ps1 -Scope project` falla por documento desactualizado.
+
+### 24. Documentar como continuar el ETL sin mover la ingesta al notebook
+
+Cambio aplicado:
+
+- Se creo `docs\guides\como-continuar-etl.md` como guia manual de continuacion del proyecto.
+- El documento resume que ya esta resuelto, que significa cada capa, por que el siguiente paso es ETL exploratorio en notebook y como pasar despues a `silver`.
+- Tambien deja registrado que al 2 de abril de 2026 existen temporadas mas nuevas que `2122`, `2223` y `2324`, pero recomienda no empezar por la temporada en curso `2526`.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- La guia queda versionada dentro de `docs\guides`.
+- El proyecto mantiene separadas las carpetas de research, notebooks generados y guias operativas.
+- La documentacion queda alineada con el estado real del pipeline y con la fuente oficial consultada.
