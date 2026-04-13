@@ -4,7 +4,7 @@
 > Regenerar con `.\scripts\export-notebook-cells.ps1` cuando cambie el notebook fuente.
 
 <!-- notebook-source: notebooks/01_explorer_matchhistory.ipynb -->
-<!-- notebook-code-and-outputs-sha256: 1160356eeb03da8ff3aa261fecf25ba9ef5896b5a2fa85f5fe41a965118a32a6 -->
+<!-- notebook-code-and-outputs-sha256: eb639ae52b6553f5f199a71416b78a53dc7fe2762097bf1c947e67ef5b18ef3a -->
 
 ## Cell 1 - imports-and-kernel-check
 
@@ -250,6 +250,11 @@ for season in SEASONS:
 
 ```text
 OK  Temporada 2122: 380 partidos | archivo=E0_2122.csv | encoding=utf-8-sig
+```
+
+**Output 2:**
+
+```text
 OK  Temporada 2223: 380 partidos | archivo=E0_2223.csv | encoding=utf-8-sig
 OK  Temporada 2324: 380 partidos | archivo=E0_2324.csv | encoding=utf-8-sig
 ```
@@ -490,4 +495,104 @@ season
 2122        380
 2223        380
 2324        380
+```
+
+## Cell 8 - 95d316a7
+
+**Explicacion:** 14. Cerrar Bronze y guardar Convertir fecha de texto a datetime real dayfirst=True porque el formato es DD/MM/YYYY
+
+```python
+# ==================================
+# 14. Cerrar Bronze y guardar
+# ==================================
+
+# Convertir fecha de texto a datetime real
+# dayfirst=True porque el formato es DD/MM/YYYY
+df_raw["Date"] = pd.to_datetime(df_raw["Date"], dayfirst=True)
+
+# Seleccionar solo las columnas que vamos a usar
+COLS = [
+    "Date", "HomeTeam", "AwayTeam", "season", "league",
+    "FTR", "FTHG", "FTAG",
+    "HTHG", "HTAG", "HTR",
+    "HS", "AS", "HST", "AST",
+    "HF", "AF", "HY", "AY", "HR", "AR",
+    "B365H", "B365D", "B365A",
+    "PSH", "PSD", "PSA",
+]
+
+df_bronze = df_raw[COLS].copy()
+
+# Ordenar por fecha — crítico para los rolling features
+df_bronze = df_bronze.sort_values("Date").reset_index(drop=True)
+
+# Verificar
+print(f"Filas:   {len(df_bronze)}")
+print(f"Columnas:{df_bronze.shape[1]}")
+print(f"Fechas:  {df_bronze['Date'].min().date()} → {df_bronze['Date'].max().date()}")
+print(f"Tipo Date: {df_bronze['Date'].dtype}")
+display(df_bronze.head(3))
+```
+
+**Output 1:**
+
+```text
+Filas:   1140
+Columnas:27
+Fechas:  2021-08-13 → 2024-05-19
+Tipo Date: datetime64[ns]
+```
+
+**Output 2:**
+
+```text
+        Date    HomeTeam  AwayTeam season              league FTR  FTHG  FTAG  \
+0 2021-08-13   Brentford   Arsenal   2122  ENG-Premier League   H     2     0   
+1 2021-08-14  Man United     Leeds   2122  ENG-Premier League   H     5     1   
+2 2021-08-14     Burnley  Brighton   2122  ENG-Premier League   A     1     2   
+
+   HTHG  HTAG HTR  HS  AS  HST  AST  HF  AF  HY  AY  HR  AR  B365H  B365D  \
+0     1     0   H   8  22    3    4  12   8   0   0   0   0   4.00   3.40   
+1     1     0   H  16  10    8    3  11   9   1   2   0   0   1.53   4.50   
+2     1     0   H  14  14    3    8  10   7   2   1   0   0   3.10   3.10   
+
+   B365A  PSH  PSD  PSA  
+0   1.95 4.05 3.46 2.05  
+1   5.75 1.56 4.57 5.96  
+2   2.45 3.30 3.12 2.51
+```
+
+## Cell 9 - f9759c81
+
+**Explicacion:** 15. Guardar parquet Bronze
+
+```python
+# ==================================
+# 15. Guardar parquet Bronze
+# ==================================
+
+RUTA_OUT = PROJECT_ROOT / "data" / "bronze" / "matchhistory" / "raw"
+RUTA_OUT.mkdir(parents=True, exist_ok=True)
+
+ruta = RUTA_OUT / "matches_bronze.parquet"
+df_bronze.to_parquet(ruta, index=False, compression="snappy")
+
+kb = ruta.stat().st_size / 1024
+print(f"Guardado en: {ruta}")
+print(f"Tamaño:      {kb:.1f} KB")
+print(f"Filas:       {len(df_bronze)}")
+print()
+print("Notebook 01 completo.")
+print("Siguiente: Notebook 02 — Silver ETL")
+```
+
+**Output 1:**
+
+```text
+Guardado en: c:\Users\Asus\Desktop\football-ml\data\bronze\matchhistory\raw\matches_bronze.parquet
+Tamaño:      42.1 KB
+Filas:       1140
+
+Notebook 01 completo.
+Siguiente: Notebook 02 — Silver ETL
 ```

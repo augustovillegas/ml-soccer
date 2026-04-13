@@ -18,7 +18,7 @@ if ([string]::IsNullOrWhiteSpace($env:PYTHONPATH)) {
     $env:PYTHONPATH = "$srcPath;$($env:PYTHONPATH)"
 }
 
-& $venvPython -m football_ml.export_notebook_cells
+& $venvPython -m football_ml.export_notebook_cells --all
 if ($LASTEXITCODE -ne 0) {
     throw "La exportacion del notebook a Markdown fallo. Revisa la salida previa para el detalle."
 }

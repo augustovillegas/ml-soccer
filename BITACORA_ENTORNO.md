@@ -460,3 +460,45 @@ Resultado esperado:
 - La guia queda versionada dentro de `docs\guides`.
 - El proyecto mantiene separadas las carpetas de research, notebooks generados y guias operativas.
 - La documentacion queda alineada con el estado real del pipeline y con la fuente oficial consultada.
+
+### 25. Crear el notebook `02_silver_matchhistory.ipynb` y sumarlo al flujo oficial
+
+Comando:
+
+```powershell
+.\scripts\export-notebook-cells.ps1
+```
+
+Objetivo:
+
+- Regenerar los respaldos Markdown oficiales de los notebooks gestionados por el proyecto.
+- Confirmar que `docs\notebooks\01_explorer_matchhistory_cells.md` y `docs\notebooks\02_silver_matchhistory_cells.md` quedan sincronizados con sus notebooks fuente.
+
+Verificacion minima:
+
+```powershell
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Resultado esperado:
+
+- Existe `notebooks\02_silver_matchhistory.ipynb`.
+- El notebook usa el kernel `football-ml (.venv)` y reutiliza el mismo bootstrap local de `01_explorer_matchhistory.ipynb`.
+- Existe `docs\notebooks\02_silver_matchhistory_cells.md`.
+- La validacion del proyecto revisa ambos notebooks oficiales y falla si alguno queda desactualizado respecto de su respaldo Markdown.
+
+Receta manual reproducible:
+
+```powershell
+.\.venv\Scripts\python.exe -m notebook
+```
+
+1. Abrir Jupyter Notebook con el entorno del proyecto y seleccionar el kernel `football-ml (.venv)` para el archivo nuevo `notebooks\02_silver_matchhistory.ipynb`.
+2. Copiar el bootstrap operativo de `notebooks\01_explorer_matchhistory.ipynb`: validacion del interprete, deteccion de `PROJECT_ROOT`, carga de `load_ingestion_config`, resolucion de `inbox/raw`, helper `read_local_csv` y construccion de `df_raw`.
+3. Guardar el notebook nuevo sin mover la ingesta al notebook ni agregar llamadas online a `MatchHistory`.
+4. Ejecutar `.\scripts\export-notebook-cells.ps1` para generar o actualizar el respaldo `docs\notebooks\02_silver_matchhistory_cells.md`.
+5. Ejecutar `.\scripts\validate-project.ps1 -Scope project` para comprobar kernel, sincronia de respaldos y revision anti-mojibake.
+
+Nota de correccion:
+
+- Antes el flujo oficial de exportacion y validacion estaba hardcodeado solo para `01_explorer_matchhistory.ipynb`; ahora contempla tambien `02_silver_matchhistory.ipynb` dentro de la lista oficial de notebooks gestionados.

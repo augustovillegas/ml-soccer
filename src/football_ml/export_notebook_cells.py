@@ -7,7 +7,13 @@ from json import JSONDecodeError
 from pathlib import Path
 import re
 
-from football_ml.paths import NOTEBOOK_CELLS_DOC_PATH, NOTEBOOK_PATH, ensure_dir, relative_to_project
+from football_ml.paths import (
+    NOTEBOOK_CELLS_DOC_PATH,
+    NOTEBOOK_PATH,
+    ensure_dir,
+    iter_managed_notebooks,
+    relative_to_project,
+)
 
 
 DEFAULT_EXPLANATION = "Codigo de la celda original sin cambios."
@@ -19,9 +25,30 @@ MARKER_SUFFIX = " -->"
 
 def parse_args() -> ArgumentParser:
     parser = ArgumentParser(description="Exporta las celdas de codigo del notebook principal a Markdown.")
-    parser.add_argument("--notebook-path", default=str(NOTEBOOK_PATH), help="Ruta al notebook fuente.")
-    parser.add_argument("--output-path", default=str(NOTEBOOK_CELLS_DOC_PATH), help="Ruta del Markdown generado.")
+    parser.add_argument("--notebook-path", help="Ruta al notebook fuente.")
+    parser.add_argument("--output-path", help="Ruta del Markdown generado.")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Exporta todos los notebooks oficiales gestionados por el proyecto.",
+    )
     return parser
+
+
+def _managed_notebook_doc_map() -> dict[Path, Path]:
+    return {entry.notebook_path.resolve(): entry.doc_path.resolve() for entry in iter_managed_notebooks()}
+
+
+def resolve_output_path_for_notebook(notebook_path: Path) -> Path:
+    notebook_key = notebook_path.resolve()
+    managed_doc_map = _managed_notebook_doc_map()
+
+    if notebook_key in managed_doc_map:
+        return managed_doc_map[notebook_key]
+
+    raise ValueError(
+        "Debes indicar --output-path cuando el notebook fuente no forma parte de los notebooks oficiales gestionados."
+    )
 
 
 def load_notebook_payload(notebook_path: Path) -> dict[str, object]:
@@ -231,6 +258,15 @@ def export_notebook_cells(notebook_path: Path = NOTEBOOK_PATH, output_path: Path
     return output_path
 
 
+def export_all_managed_notebooks() -> list[Path]:
+    exported_paths: list[Path] = []
+
+    for entry in iter_managed_notebooks():
+        exported_paths.append(export_notebook_cells(entry.notebook_path, entry.doc_path))
+
+    return exported_paths
+
+
 def check_generated_markdown_sync(
     notebook_path: Path = NOTEBOOK_PATH,
     output_path: Path = NOTEBOOK_CELLS_DOC_PATH,
@@ -260,10 +296,25 @@ def check_generated_markdown_sync(
 
 def main() -> int:
     args = parse_args().parse_args()
-    notebook_path = Path(args.notebook_path).resolve()
-    output_path = Path(args.output_path).resolve()
 
     try:
+        if args.all or (not args.notebook_path and not args.output_path):
+            exported_paths = export_all_managed_notebooks()
+            print("Notebook cells exported to:")
+            for exported_path in exported_paths:
+                print(f"- {exported_path}")
+            return 0
+
+        if args.output_path and not args.notebook_path:
+            raise ValueError("Debes indicar --notebook-path cuando usas --output-path.")
+
+        notebook_path = Path(args.notebook_path).resolve() if args.notebook_path else NOTEBOOK_PATH.resolve()
+        output_path = (
+            Path(args.output_path).resolve()
+            if args.output_path
+            else resolve_output_path_for_notebook(notebook_path)
+        )
+
         exported_path = export_notebook_cells(notebook_path=notebook_path, output_path=output_path)
     except Exception as exc:
         print(str(exc))

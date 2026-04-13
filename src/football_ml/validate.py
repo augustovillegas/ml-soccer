@@ -12,14 +12,13 @@ from football_ml.config import load_ingestion_config
 from football_ml.paths import (
     CONFIG_DIR,
     DATA_DIR,
-    NOTEBOOK_CELLS_DOC_PATH,
     NOTEBOOK_DOCS_DIR,
     EXPECTED_KERNEL_DISPLAY_NAME,
     EXPECTED_KERNEL_NAME,
     EXPECTED_PYTHON,
     LOGS_DIR,
-    NOTEBOOK_PATH,
     PROJECT_ROOT,
+    iter_managed_notebooks,
 )
 
 
@@ -73,27 +72,39 @@ def _check_mojibake() -> list[str]:
 
 def _check_notebook() -> list[str]:
     issues: list[str] = []
-    notebook = json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
-    kernelspec = notebook.get("metadata", {}).get("kernelspec", {})
+    for entry in iter_managed_notebooks():
+        if not entry.notebook_path.exists():
+            issues.append(f"Falta la ruta requerida: {entry.notebook_path}")
+            continue
 
-    if kernelspec.get("name") != EXPECTED_KERNEL_NAME:
-        issues.append(
-            f"{NOTEBOOK_PATH}: kernelspec.name debe ser '{EXPECTED_KERNEL_NAME}' y no '{kernelspec.get('name')}'."
-        )
-    if kernelspec.get("display_name") != EXPECTED_KERNEL_DISPLAY_NAME:
-        issues.append(
-            f"{NOTEBOOK_PATH}: kernelspec.display_name debe ser '{EXPECTED_KERNEL_DISPLAY_NAME}'."
-        )
+        notebook = json.loads(entry.notebook_path.read_text(encoding="utf-8"))
+        kernelspec = notebook.get("metadata", {}).get("kernelspec", {})
 
-    notebook_text = NOTEBOOK_PATH.read_text(encoding="utf-8")
-    for snippet in NOTEBOOK_FORBIDDEN_SNIPPETS:
-        if snippet in notebook_text:
-            issues.append(f"{NOTEBOOK_PATH}: el notebook no debe hacer ingesta online ({snippet}).")
+        if kernelspec.get("name") != EXPECTED_KERNEL_NAME:
+            issues.append(
+                f"{entry.notebook_path}: kernelspec.name debe ser '{EXPECTED_KERNEL_NAME}' y no '{kernelspec.get('name')}'."
+            )
+        if kernelspec.get("display_name") != EXPECTED_KERNEL_DISPLAY_NAME:
+            issues.append(
+                f"{entry.notebook_path}: kernelspec.display_name debe ser '{EXPECTED_KERNEL_DISPLAY_NAME}'."
+            )
+
+        notebook_text = entry.notebook_path.read_text(encoding="utf-8")
+        for snippet in NOTEBOOK_FORBIDDEN_SNIPPETS:
+            if snippet in notebook_text:
+                issues.append(f"{entry.notebook_path}: el notebook no debe hacer ingesta online ({snippet}).")
     return issues
 
 
 def _check_generated_notebook_doc() -> list[str]:
-    return check_generated_markdown_sync(NOTEBOOK_PATH, NOTEBOOK_CELLS_DOC_PATH)
+    issues: list[str] = []
+
+    for entry in iter_managed_notebooks():
+        if not entry.notebook_path.exists():
+            continue
+        issues.extend(check_generated_markdown_sync(entry.notebook_path, entry.doc_path))
+
+    return issues
 
 
 def _check_required_paths(config) -> list[str]:
@@ -151,12 +162,14 @@ def main() -> int:
             )
 
     if args.scope == "project":
+        managed_paths = []
+        for entry in iter_managed_notebooks():
+            managed_paths.extend((entry.notebook_path, entry.doc_path))
         for path in (
             PROJECT_ROOT / "AGENTS.md",
             PROJECT_ROOT / "BITACORA_ENTORNO.md",
-            NOTEBOOK_PATH,
             NOTEBOOK_DOCS_DIR,
-            NOTEBOOK_CELLS_DOC_PATH,
+            *managed_paths,
         ):
             if not path.exists():
                 issues.append(f"Falta la ruta requerida: {path}")
