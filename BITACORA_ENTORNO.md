@@ -640,3 +640,111 @@ Resultado esperado:
 - La validacion falla si reaparece un `.ipynb_checkpoints`, `*.egg-info`, `.pytest_cache`, datos versionados o logs versionados por error.
 - `tests\` ejecuta pruebas offline y smoke tests locales sin depender de internet.
 - El checkpoint `notebooks\.ipynb_checkpoints\01_explorer_matchhistory-checkpoint.ipynb` deja de formar parte del repositorio.
+
+### 31. Publicar el repo con datos oficiales revisables y Git por SSH
+
+Comando:
+
+```powershell
+git remote -v
+```
+
+Objetivo:
+
+- Verificar el remoto oficial del repositorio antes de ajustar el versionado y el push.
+
+Verificacion minima:
+
+- `origin` apunta a `git@github.com:augustovillegas/ml-soccer.git` para fetch y push.
+
+Comando:
+
+```powershell
+icacls $HOME\.ssh\id_ed25519 /inheritance:r
+icacls $HOME\.ssh\id_ed25519 /grant:r "$((whoami)):(F)"
+icacls $HOME\.ssh\id_ed25519 /grant:r "NT AUTHORITY\SYSTEM:(F)"
+icacls $HOME\.ssh\id_ed25519 /grant:r "BUILTIN\Administradores:(F)"
+```
+
+Objetivo:
+
+- Dejar la clave privada SSH con permisos compatibles con OpenSSH en Windows para que Git pueda intentar autenticarse contra GitHub.
+
+Verificacion minima:
+
+```powershell
+icacls $HOME\.ssh\id_ed25519
+```
+
+Resultado esperado:
+
+- La ACL de `id_ed25519` queda limitada al usuario actual, `SYSTEM` y `Administradores`.
+- Desaparece el error de permisos abiertos sobre la clave privada.
+
+Correccion relevante:
+
+- Antes de fijar la ACL correcta, OpenSSH rechazaba `id_ed25519` por permisos demasiado amplios.
+
+Comando:
+
+```powershell
+git config core.sshCommand "ssh -i C:/Users/Asus/.ssh/id_ed25519 -o IdentitiesOnly=yes"
+```
+
+Objetivo:
+
+- Forzar que este repositorio use la clave SSH correcta al operar con `origin`.
+
+Verificacion minima:
+
+```powershell
+git config --get core.sshCommand
+```
+
+Resultado esperado:
+
+- Git devuelve `ssh -i C:/Users/Asus/.ssh/id_ed25519 -o IdentitiesOnly=yes`.
+
+Comando:
+
+```powershell
+ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T git@github.com
+```
+
+Objetivo:
+
+- Comprobar si la autenticacion SSH contra GitHub ya puede completarse sin interaccion.
+
+Resultado observado:
+
+- La conexion ya no falla por ACL de la clave, pero sigue devolviendo `Permission denied (publickey)` porque la clave requiere passphrase o todavia no esta habilitada para este acceso en GitHub.
+
+Comando:
+
+```powershell
+git status --ignored --short
+git ls-files
+```
+
+Objetivo:
+
+- Verificar que solo queden ignorados los artefactos transitorios y que los datasets oficiales queden versionados.
+
+Verificacion minima:
+
+- `git status --ignored --short` mantiene ignorados `logs/`, `.venv/`, caches y `data/bronze/matchhistory/inbox`.
+- `git ls-files` incluye `data/bronze/matchhistory/raw/*`, `data/bronze/matchhistory/manifests/*` y `data/silver/matches_silver.parquet`.
+
+Comando:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Objetivo:
+
+- Validar offline que el nuevo contrato de versionado no rompe tests ni contratos del proyecto.
+
+Verificacion minima:
+
+- La suite pasa sin depender de internet.

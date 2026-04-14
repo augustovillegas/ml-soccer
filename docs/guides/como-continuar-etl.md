@@ -35,6 +35,19 @@ En el estado actual, el notebook trabaja sobre datos locales y ya mostro:
 
 Eso significa que la capa `bronze` inicial ya existe y ya sirve como base para explorar.
 
+Ademas, el repositorio ya distribuye para revision completa los artefactos oficiales persistidos de MatchHistory:
+
+- CSV canonicos en `data/bronze/matchhistory/raw`
+- manifests JSON en `data/bronze/matchhistory/manifests`
+- `data/bronze/matchhistory/raw/matches_bronze.parquet`
+- `data/silver/matches_silver.parquet`
+
+Siguen fuera de Git:
+
+- `data/bronze/matchhistory/inbox` como staging manual transitorio
+- `logs/`
+- caches, checkpoints y el entorno `.venv`
+
 ## Que significa cada capa en este proyecto
 
 ### Extraccion

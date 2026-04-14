@@ -18,10 +18,18 @@ logs/**
 data/bronze/**
 !data/bronze/**/
 !data/bronze/**/.gitkeep
+!data/bronze/matchhistory/raw/
+!data/bronze/matchhistory/raw/**
+!data/bronze/matchhistory/manifests/
+!data/bronze/matchhistory/manifests/**
+data/bronze/matchhistory/inbox/**
+!data/bronze/matchhistory/inbox/**/
+!data/bronze/matchhistory/inbox/**/.gitkeep
 
 data/silver/**
 !data/silver/**/
 !data/silver/**/.gitkeep
+!data/silver/matches_silver.parquet
 
 data/gold/**
 !data/gold/**/

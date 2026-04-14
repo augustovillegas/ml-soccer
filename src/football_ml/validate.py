@@ -210,8 +210,24 @@ def _git_tracked_paths() -> list[str]:
     ]
 
 
-def _tracked_generated_artifact_issues(tracked_paths: Iterable[str]) -> list[str]:
+def _allowed_tracked_data_paths() -> set[str]:
+    config = load_ingestion_config()
+    allowed_paths = {
+        str(relative_to_project(dataset.path)).replace("\\", "/")
+        for dataset in iter_managed_datasets()
+    }
+    for season in config.seasons:
+        allowed_paths.add(str(relative_to_project(config.canonical_csv_path(season))).replace("\\", "/"))
+        allowed_paths.add(str(relative_to_project(config.manifest_path(season))).replace("\\", "/"))
+    return allowed_paths
+
+
+def _tracked_generated_artifact_issues(
+    tracked_paths: Iterable[str],
+    allowed_data_paths: set[str] | None = None,
+) -> list[str]:
     issues: list[str] = []
+    effective_allowed_data_paths = allowed_data_paths if allowed_data_paths is not None else _allowed_tracked_data_paths()
 
     for tracked_path in tracked_paths:
         if "/.ipynb_checkpoints/" in tracked_path or tracked_path.startswith(".ipynb_checkpoints/"):
@@ -222,9 +238,13 @@ def _tracked_generated_artifact_issues(tracked_paths: Iterable[str]) -> list[str
             issues.append(f"{tracked_path}: '*.egg-info/' es un artefacto generado y no debe estar versionado.")
         if "/.pytest_cache/" in tracked_path or tracked_path.startswith(".pytest_cache/"):
             issues.append(f"{tracked_path}: '.pytest_cache/' es un artefacto generado y no debe estar versionado.")
-        if tracked_path.startswith("data/") and not tracked_path.endswith(".gitkeep"):
+        if (
+            tracked_path.startswith("data/")
+            and not tracked_path.endswith(".gitkeep")
+            and tracked_path not in effective_allowed_data_paths
+        ):
             issues.append(
-                f"{tracked_path}: los artefactos de data no deben estar versionados salvo '.gitkeep'."
+                f"{tracked_path}: solo los datasets y artefactos oficiales de data registrados para distribucion pueden quedar versionados."
             )
         if tracked_path.startswith("logs/") and not tracked_path.endswith(".gitkeep"):
             issues.append(

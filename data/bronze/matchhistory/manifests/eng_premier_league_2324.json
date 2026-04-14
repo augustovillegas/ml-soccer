@@ -1,0 +1,15 @@
+{
+  "league": "ENG-Premier League",
+  "season": "2324",
+  "status": "no_change_manual",
+  "source_mode": "manual_csv",
+  "source_url": null,
+  "source_file": "data\\bronze\\matchhistory\\inbox\\E0_2324.csv",
+  "last_checked_at_utc": "2026-04-12T18:38:53Z",
+  "saved_at_utc": "2026-04-04T18:08:19Z",
+  "row_count": 380,
+  "column_count": 106,
+  "sha256": "b2e057b0ed959f198b0f63d2391c01239f3608e6de5db68edab3f88e04d07ff3",
+  "previous_sha256": "b2e057b0ed959f198b0f63d2391c01239f3608e6de5db68edab3f88e04d07ff3",
+  "canonical_file": "data\\bronze\\matchhistory\\raw\\eng_premier_league_2324.csv"
+}

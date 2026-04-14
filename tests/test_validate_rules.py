@@ -65,17 +65,30 @@ def test_tracked_generated_artifact_issues_detect_forbidden_paths() -> None:
         [
             "notebooks/.ipynb_checkpoints/01_explorer_matchhistory-checkpoint.ipynb",
             "src/football_ml.egg-info/PKG-INFO",
+            "data/bronze/matchhistory/raw/eng_premier_league_2122.csv",
+            "data/bronze/matchhistory/manifests/eng_premier_league_2122.json",
             "data/silver/matches_silver.parquet",
+            "data/bronze/matchhistory/inbox/E0_2122.csv",
+            "data/gold/model_ready.parquet",
             "logs/ingestion/run.log",
             "data/silver/.gitkeep",
-        ]
+        ],
+        allowed_data_paths={
+            "data/bronze/matchhistory/raw/eng_premier_league_2122.csv",
+            "data/bronze/matchhistory/manifests/eng_premier_league_2122.json",
+            "data/silver/matches_silver.parquet",
+        },
     )
 
     assert any("checkpoints de notebook" in issue for issue in issues)
     assert any(".egg-info" in issue for issue in issues)
-    assert any("artefactos de data" in issue for issue in issues)
+    assert any(issue.startswith("data/bronze/matchhistory/inbox/E0_2122.csv") for issue in issues)
+    assert any(issue.startswith("data/gold/model_ready.parquet") for issue in issues)
     assert any("artefactos de logs" in issue for issue in issues)
     assert all(not issue.startswith("data/silver/.gitkeep") for issue in issues)
+    assert all(not issue.startswith("data/bronze/matchhistory/raw/eng_premier_league_2122.csv") for issue in issues)
+    assert all(not issue.startswith("data/bronze/matchhistory/manifests/eng_premier_league_2122.json") for issue in issues)
+    assert all(not issue.startswith("data/silver/matches_silver.parquet") for issue in issues)
 
 
 def test_validate_managed_dataset_rejects_new_silver_stage_root_file(

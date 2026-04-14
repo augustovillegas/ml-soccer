@@ -47,13 +47,15 @@ La validacion del proyecto debe revisar esos contratos contra el archivo real cu
 
 ## Estructura escalable de datos
 
-- No versionar outputs de `data/` ni de `logs/`, salvo `*.gitkeep`.
+- Versionar solo datasets y artefactos oficiales de `data/` que el proyecto distribuye para revision reproducible.
+- Mantener fuera de Git `logs/`, `data/bronze/matchhistory/inbox` y artefactos locales/transitorios, salvo `*.gitkeep`.
 - Los datasets nuevos en `silver` y `gold` no deben vivir como archivos sueltos en la raiz del stage.
 - Los datasets nuevos deben ir namespaced por dominio, por ejemplo `data/silver/matchhistory/...`.
 
 Excepcion transitoria actual:
 
 - `data/silver/matches_silver.parquet` sigue permitido como excepcion documentada mientras `silver` continue exploratoria y no exista un segundo dataset `silver` oficial.
+- `data/bronze/matchhistory/raw/*.csv`, `data/bronze/matchhistory/raw/matches_bronze.parquet` y `data/bronze/matchhistory/manifests/*.json` quedan versionados como artefactos oficiales del workflow MatchHistory.
 
 ## Notebooks oficiales
 

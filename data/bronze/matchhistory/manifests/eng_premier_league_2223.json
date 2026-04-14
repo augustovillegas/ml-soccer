@@ -1,0 +1,15 @@
+{
+  "league": "ENG-Premier League",
+  "season": "2223",
+  "status": "no_change_manual",
+  "source_mode": "manual_csv",
+  "source_url": null,
+  "source_file": "data\\bronze\\matchhistory\\inbox\\E0_2223.csv",
+  "last_checked_at_utc": "2026-04-12T18:38:47Z",
+  "saved_at_utc": "2026-04-04T18:08:14Z",
+  "row_count": 380,
+  "column_count": 106,
+  "sha256": "8442792d3b614c94ea3cf381bd2736805889cc1713169035368fff19c3d02380",
+  "previous_sha256": "8442792d3b614c94ea3cf381bd2736805889cc1713169035368fff19c3d02380",
+  "canonical_file": "data\\bronze\\matchhistory\\raw\\eng_premier_league_2223.csv"
+}
