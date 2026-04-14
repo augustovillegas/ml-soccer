@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pandas as pd
 import pytest
@@ -9,7 +10,9 @@ from football_ml.paths import ManagedDataset, iter_managed_datasets
 import football_ml.validate as validate_module
 from football_ml.validate import (
     _local_notebook_checkpoint_issues,
+    _orphan_notebook_doc_issues,
     _tracked_generated_artifact_issues,
+    _unregistered_notebook_issues,
     _validate_managed_dataset,
 )
 
@@ -93,19 +96,61 @@ def test_tracked_generated_artifact_issues_detect_forbidden_paths() -> None:
 
 
 def test_local_notebook_checkpoint_issues_detect_untracked_checkpoints(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    checkpoint_dir = tmp_path / "notebooks" / ".ipynb_checkpoints"
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    (checkpoint_dir / "02_silver_matchhistory-checkpoint.ipynb").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(validate_module, "PROJECT_ROOT", tmp_path)
+    with TemporaryDirectory() as temp_dir:
+        project_root = Path(temp_dir) / "workspace"
+        checkpoint_dir = project_root / "notebooks" / ".ipynb_checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        (checkpoint_dir / "02_silver_matchhistory-checkpoint.ipynb").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(validate_module, "PROJECT_ROOT", project_root)
 
-    issues = _local_notebook_checkpoint_issues()
+        issues = _local_notebook_checkpoint_issues()
 
     assert len(issues) == 1
     assert "notebooks" in issues[0]
     assert "02_silver_matchhistory-checkpoint.ipynb" in issues[0]
+
+
+def test_local_notebook_checkpoint_issues_ignore_pytest_temp_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = tmp_path / "workspace"
+    checkpoint_dir = project_root / ".pytest_tmp" / "run0" / "notebooks" / ".ipynb_checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    (checkpoint_dir / "02_silver_matchhistory-checkpoint.ipynb").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(validate_module, "PROJECT_ROOT", project_root)
+
+    issues = _local_notebook_checkpoint_issues()
+
+    assert not issues
+
+
+def test_unregistered_notebook_issues_detect_numbered_notebook_outside_manifest(
+    tmp_path: Path,
+) -> None:
+    notebook_dir = tmp_path / "notebooks"
+    notebook_dir.mkdir(parents=True, exist_ok=True)
+    unexpected_notebook = notebook_dir / "03_gold_features.ipynb"
+    unexpected_notebook.write_text("{}", encoding="utf-8")
+
+    issues = _unregistered_notebook_issues((), notebook_dir)
+
+    assert len(issues) == 1
+    assert "03_gold_features.ipynb" in issues[0]
+
+
+def test_orphan_notebook_doc_issues_detect_extra_cells_markdown(tmp_path: Path) -> None:
+    docs_dir = tmp_path / "docs" / "notebooks"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    orphan_doc = docs_dir / "03_gold_features_cells.md"
+    orphan_doc.write_text("# orphan\n", encoding="utf-8")
+
+    issues = _orphan_notebook_doc_issues((), docs_dir)
+
+    assert len(issues) == 1
+    assert "03_gold_features_cells.md" in issues[0]
 
 
 def test_validate_managed_dataset_rejects_new_silver_stage_root_file(

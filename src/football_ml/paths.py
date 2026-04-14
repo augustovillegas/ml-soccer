@@ -1,12 +1,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from football_ml.governance import CONFIG_DIR, ManagedNotebook, PROJECT_ROOT, load_project_governance
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_DIR = PROJECT_ROOT / "config"
+
 DATA_DIR = PROJECT_ROOT / "data"
 DOCS_DIR = PROJECT_ROOT / "docs"
-NOTEBOOK_DOCS_DIR = DOCS_DIR / "notebooks"
 LOGS_DIR = PROJECT_ROOT / "logs"
 INGESTION_LOGS_DIR = LOGS_DIR / "ingestion"
 MATCHHISTORY_DIR = DATA_DIR / "bronze" / "matchhistory"
@@ -16,16 +15,14 @@ MATCHHISTORY_MANIFEST_DIR = MATCHHISTORY_DIR / "manifests"
 MATCHHISTORY_SILVER_DIR = DATA_DIR / "silver" / "matchhistory"
 MATCHHISTORY_BRONZE_PARQUET_PATH = MATCHHISTORY_RAW_DIR / "matches_bronze.parquet"
 MATCHHISTORY_SILVER_PARQUET_PATH = DATA_DIR / "silver" / "matches_silver.parquet"
+PROJECT_GOVERNANCE = load_project_governance()
+GOVERNED_ENVIRONMENT = PROJECT_GOVERNANCE.environment
+NOTEBOOKS_DIR = GOVERNED_ENVIRONMENT.notebooks_dir
+NOTEBOOK_DOCS_DIR = GOVERNED_ENVIRONMENT.notebook_docs_dir
+EXPECTED_PYTHON_VERSION = GOVERNED_ENVIRONMENT.python_version
 EXPECTED_PYTHON = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
-EXPECTED_KERNEL_NAME = "football-ml"
-EXPECTED_KERNEL_DISPLAY_NAME = "football-ml (.venv)"
-
-
-@dataclass(frozen=True)
-class ManagedNotebook:
-    notebook_path: Path
-    doc_path: Path
-    expected_cell_ids: tuple[str, ...]
+EXPECTED_KERNEL_NAME = GOVERNED_ENVIRONMENT.kernel_name
+EXPECTED_KERNEL_DISPLAY_NAME = GOVERNED_ENVIRONMENT.kernel_display_name
 
 
 @dataclass(frozen=True)
@@ -41,36 +38,7 @@ class ManagedDataset:
     transition_note: str | None = None
 
 
-MANAGED_NOTEBOOKS = (
-    ManagedNotebook(
-        notebook_path=PROJECT_ROOT / "notebooks" / "01_explorer_matchhistory.ipynb",
-        doc_path=NOTEBOOK_DOCS_DIR / "01_explorer_matchhistory_cells.md",
-        expected_cell_ids=(
-            "imports-and-kernel-check",
-            "config-and-source-selection",
-            "build-file-map",
-            "csv-reader-helper",
-            "load-loop",
-            "concat-and-summary",
-            "basic-audit",
-            "bronze-final-selection",
-            "bronze-parquet-write",
-        ),
-    ),
-    ManagedNotebook(
-        notebook_path=PROJECT_ROOT / "notebooks" / "02_silver_matchhistory.ipynb",
-        doc_path=NOTEBOOK_DOCS_DIR / "02_silver_matchhistory_cells.md",
-        expected_cell_ids=(
-            "imports-and-kernel-check",
-            "bronze-parquet-load",
-            "game-key-derivation",
-            "bet365-probability-normalization",
-            "target-encoding",
-            "silver-build-and-write",
-            "silver-summary",
-        ),
-    ),
-)
+MANAGED_NOTEBOOKS = PROJECT_GOVERNANCE.notebooks
 
 MANAGED_DATASETS = (
     ManagedDataset(

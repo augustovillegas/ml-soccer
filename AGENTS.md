@@ -12,9 +12,9 @@
 - Usar siempre el interprete del entorno virtual de forma explicita: `.\.venv\Scripts\python.exe`.
 - Instalar paquetes con `.\.venv\Scripts\python.exe -m pip ...`.
 - No usar `pip` global ni asumir que el entorno esta activado.
-- Cuando se actualicen dependencias directas del proyecto, reflejarlas en `requirements.txt`.
+- Cuando se actualicen dependencias directas del proyecto, tratarlas primero en `pyproject.toml` y luego resincronizar `requirements.txt`.
 - Para notebooks de este proyecto, usar el kernel dedicado `football-ml (.venv)` en lugar del kernel generico `python3`.
-- Usar `.\scripts\bootstrap.ps1`, `.\scripts\validate-project.ps1`, `.\scripts\ingest-matchhistory.ps1`, `.\scripts\refresh-matchhistory.ps1` y `.\scripts\export-notebook-cells.ps1` como interfaces oficiales del proyecto en Windows.
+- Usar `.\scripts\bootstrap.ps1`, `.\scripts\validate-project.ps1`, `.\scripts\sync-project.ps1`, `.\scripts\scaffold-notebook.ps1`, `.\scripts\ingest-matchhistory.ps1`, `.\scripts\refresh-matchhistory.ps1` y `.\scripts\export-notebook-cells.ps1` como interfaces oficiales del proyecto en Windows.
 - Ejecutar los tests del proyecto con `.\.venv\Scripts\python.exe -m pytest`.
 
 ## Regla de mantenimiento de la bitacora
@@ -52,9 +52,11 @@
 
 - `AGENTS.md` define reglas operativas obligatorias.
 - `BITACORA_ENTORNO.md` registra comandos y cambios operativos reproducibles.
+- `config/project_governance.toml` define el entorno gobernado y el registro oficial de notebooks.
 - `docs/guides/*` explica como operar o continuar.
-- `docs/notebooks/*` solo replica notebooks oficiales.
+- `docs/notebooks/*` solo replica notebooks oficiales y `docs/notebooks/README.md` inventaria los registrados.
 - `src/football_ml/*` y `scripts/*` son la implementacion oficial.
+- `pyproject.toml` es la fuente primaria de dependencias directas y `requirements.txt` es su artefacto sincronizado.
 - Si una regla o flujo aparece en dos lugares, uno debe tratarse como fuente primaria y el otro debe referenciarlo, no redefinirlo con variaciones.
 
 ## Regla de ownership por capa
@@ -80,13 +82,14 @@
 
 - `notebooks/01_explorer_matchhistory.ipynb` es la referencia oficial de estilo y estructura para los notebooks futuros.
 - Todo notebook oficial nuevo debe seguir el patron de nombre `NN_<etapa>_<tema>.ipynb`.
+- Todo notebook oficial nuevo debe darse de alta desde `config/project_governance.toml`, preferentemente usando `.\scripts\scaffold-notebook.ps1`.
 - Todo notebook oficial debe usar el kernel `football-ml (.venv)` y validar explicitamente `PROJECT_ROOT`, `EXPECTED_PYTHON` y `sys.executable` en la primera celda.
 - Toda celda de codigo debe empezar con encabezados numerados estilo `01`: separador, titulo en espanol y comentario corto que explique el objetivo de la celda.
 - Los IDs de celdas de notebooks oficiales deben ser slugs descriptivos, estables y sin valores aleatorios.
 - Los notebooks oficiales solo pueden leer datos locales del proyecto; la ingesta online y las descargas quedan fuera del notebook y se ejecutan desde los scripts oficiales.
-- Los notebooks oficiales conservan los outputs guardados que documentan el estado validado de cada etapa; si cambia codigo u output, el respaldo Markdown debe regenerarse.
-- Si cambia cualquier notebook oficial gestionado por el proyecto, regenerar su respaldo en `docs/notebooks/*_cells.md` con `.\scripts\export-notebook-cells.ps1` antes de cerrar la tarea.
-- Antes de cerrar cambios en notebooks oficiales, ejecutar `.\scripts\validate-project.ps1 -Scope project` para validar kernel, bootstrap, IDs de celdas, sincronizacion del Markdown generado y revision anti-mojibake.
+- Los notebooks oficiales conservan los outputs guardados que documentan el estado validado de cada etapa; si cambia codigo u output, hay que resincronizar sus artefactos generados.
+- Si cambia cualquier notebook oficial gestionado por el proyecto, ejecutar `.\scripts\sync-project.ps1` antes de cerrar la tarea para regenerar `docs/notebooks/*_cells.md`, `docs/notebooks/README.md` y revisar la sincronizacion de dependencias.
+- Antes de cerrar cambios en notebooks oficiales, ejecutar `.\scripts\validate-project.ps1 -Scope project` para validar kernel, bootstrap, manifiesto, inventario, Markdown generado y revision anti-mojibake.
 
 ## Regla para artefactos generados
 
@@ -99,6 +102,7 @@
 - Cada cambio debe revisar su impacto en codigo, config, notebook oficial, export Markdown, guia operativa, bitacora, validacion y tests.
 - Si una de esas secciones fue impactada y no se actualiza, el cambio queda incompleto.
 - `validate-project.ps1` sigue siendo el gate estructural del proyecto.
+- `sync-project.ps1` es el gate de sincronizacion de artefactos generados del proyecto.
 - `.\.venv\Scripts\python.exe -m pytest` pasa a ser el gate funcional offline y ligero para contratos y smoke tests.
 - No agregar tests que requieran internet para el camino normal del proyecto.
 

@@ -1,37 +1,52 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser
-from football_ml.export_notebook_cells import check_generated_markdown_sync
 from importlib import import_module
 import json
-import subprocess
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Iterable
 
 import pandas as pd
 
 from football_ml.config import load_ingestion_config
+from football_ml.export_notebook_cells import check_generated_markdown_sync
+from football_ml.governance import PROJECT_GOVERNANCE_PATH
 from football_ml.paths import (
     CONFIG_DIR,
     DATA_DIR,
-    ManagedDataset,
-    NOTEBOOK_DOCS_DIR,
     EXPECTED_KERNEL_DISPLAY_NAME,
     EXPECTED_KERNEL_NAME,
     EXPECTED_PYTHON,
+    EXPECTED_PYTHON_VERSION,
     LOGS_DIR,
+    ManagedDataset,
+    ManagedNotebook,
+    NOTEBOOK_DOCS_DIR,
+    NOTEBOOKS_DIR,
+    PROJECT_GOVERNANCE,
     PROJECT_ROOT,
     iter_managed_datasets,
     iter_managed_notebooks,
     relative_to_project,
 )
+from football_ml.sync_project import check_notebooks_index_sync, check_requirements_sync
 
 
 KERNELSPEC_PATH = PROJECT_ROOT / ".venv" / "share" / "jupyter" / "kernels" / EXPECTED_KERNEL_NAME / "kernel.json"
-SOURCE_SUFFIXES = {".md", ".py", ".ps1", ".toml", ".ipynb", ".json", ".txt"}
-EXCLUDED_PARTS = {".git", ".venv", "__pycache__", ".ipynb_checkpoints", "data", "logs"}
+SOURCE_SUFFIXES = {".md", ".py", ".ps1", ".toml", ".ipynb", ".json", ".txt", ".yml", ".yaml"}
+EXCLUDED_PARTS = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".ipynb_checkpoints",
+    ".pytest_cache",
+    ".pytest_tmp",
+    "data",
+    "logs",
+}
 SUSPICIOUS_SEQUENCES = (
     "\u00c3",
     "\u00c2",
@@ -60,6 +75,11 @@ BOOTSTRAP_REQUIRED_SNIPPETS = (
 
 def _is_expected_python() -> bool:
     return Path(sys.executable).resolve() == EXPECTED_PYTHON.resolve()
+
+
+def _is_expected_python_version() -> bool:
+    active_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    return active_version == EXPECTED_PYTHON_VERSION
 
 
 def _iter_source_files(root: Path) -> Iterable[Path]:
@@ -92,7 +112,7 @@ def _local_notebook_checkpoint_issues() -> list[str]:
     for checkpoint_dir in PROJECT_ROOT.rglob(".ipynb_checkpoints"):
         if not checkpoint_dir.is_dir():
             continue
-        if ".venv" in checkpoint_dir.parts:
+        if ".venv" in checkpoint_dir.parts or ".pytest_tmp" in checkpoint_dir.parts:
             continue
         relative_dir = relative_to_project(checkpoint_dir)
         checkpoint_files = sorted(path.name for path in checkpoint_dir.iterdir() if path.is_file())
@@ -247,9 +267,7 @@ def _tracked_generated_artifact_issues(
 
     for tracked_path in tracked_paths:
         if "/.ipynb_checkpoints/" in tracked_path or tracked_path.startswith(".ipynb_checkpoints/"):
-            issues.append(
-                f"{tracked_path}: los checkpoints de notebook no deben estar versionados."
-            )
+            issues.append(f"{tracked_path}: los checkpoints de notebook no deben estar versionados.")
         if ".egg-info/" in tracked_path:
             issues.append(f"{tracked_path}: '*.egg-info/' es un artefacto generado y no debe estar versionado.")
         if "/.pytest_cache/" in tracked_path or tracked_path.startswith(".pytest_cache/"):
@@ -263,9 +281,7 @@ def _tracked_generated_artifact_issues(
                 f"{tracked_path}: solo los datasets y artefactos oficiales de data registrados para distribucion pueden quedar versionados."
             )
         if tracked_path.startswith("logs/") and not tracked_path.endswith(".gitkeep"):
-            issues.append(
-                f"{tracked_path}: los artefactos de logs no deben estar versionados salvo '.gitkeep'."
-            )
+            issues.append(f"{tracked_path}: los artefactos de logs no deben estar versionados salvo '.gitkeep'.")
 
     return issues
 
@@ -274,9 +290,63 @@ def _check_tracked_generated_artifacts() -> list[str]:
     return _tracked_generated_artifact_issues(_git_tracked_paths())
 
 
-def _check_notebook() -> list[str]:
+def _notebook_manifest_order_issues(managed_notebooks: tuple[ManagedNotebook, ...]) -> list[str]:
     issues: list[str] = []
-    for entry in iter_managed_notebooks():
+    expected_orders = list(range(1, len(managed_notebooks) + 1))
+    actual_orders = [entry.order for entry in managed_notebooks]
+
+    if actual_orders != expected_orders:
+        issues.append(
+            f"Los notebooks oficiales deben usar ordenes consecutivos {expected_orders} y no {actual_orders}."
+        )
+
+    for entry in managed_notebooks:
+        expected_prefix = f"{entry.order:02d}_"
+        if not entry.notebook_path.name.startswith(expected_prefix):
+            issues.append(f"{entry.notebook_path}: el prefijo del nombre debe coincidir con order={entry.order:02d}.")
+
+    return issues
+
+
+def _unregistered_notebook_issues(
+    managed_notebooks: tuple[ManagedNotebook, ...],
+    notebooks_dir: Path = NOTEBOOKS_DIR,
+) -> list[str]:
+    issues: list[str] = []
+    registered_paths = {entry.notebook_path.resolve() for entry in managed_notebooks}
+
+    for notebook_path in sorted(notebooks_dir.glob("*.ipynb")):
+        if not MANAGED_NOTEBOOK_PATTERN.match(notebook_path.name):
+            continue
+        if notebook_path.resolve() not in registered_paths:
+            issues.append(
+                f"{relative_to_project(notebook_path)}: notebook numerado detectado fuera del manifiesto oficial."
+            )
+
+    return issues
+
+
+def _orphan_notebook_doc_issues(
+    managed_notebooks: tuple[ManagedNotebook, ...],
+    notebook_docs_dir: Path = NOTEBOOK_DOCS_DIR,
+) -> list[str]:
+    issues: list[str] = []
+    registered_docs = {entry.doc_path.resolve() for entry in managed_notebooks}
+
+    for doc_path in sorted(notebook_docs_dir.glob("*_cells.md")):
+        if doc_path.resolve() not in registered_docs:
+            issues.append(
+                f"{relative_to_project(doc_path)}: export Markdown huerfano sin notebook oficial registrado."
+            )
+
+    return issues
+
+
+def _check_notebook(managed_notebooks: tuple[ManagedNotebook, ...] | None = None) -> list[str]:
+    issues: list[str] = []
+    effective_managed_notebooks = managed_notebooks if managed_notebooks is not None else iter_managed_notebooks()
+
+    for entry in effective_managed_notebooks:
         if not entry.notebook_path.exists():
             issues.append(f"Falta la ruta requerida: {entry.notebook_path}")
             continue
@@ -303,12 +373,10 @@ def _check_notebook() -> list[str]:
             continue
 
         actual_cell_ids = tuple(str(cell.get("id", "")).strip() for cell in code_cells)
-        if actual_cell_ids != entry.expected_cell_ids:
-            issues.append(
-                f"{entry.notebook_path}: los ids de celda deben ser {entry.expected_cell_ids} y no {actual_cell_ids}."
-            )
+        if any(not cell_id for cell_id in actual_cell_ids):
+            issues.append(f"{entry.notebook_path}: todas las celdas de codigo deben tener un id estable.")
 
-        invalid_ids = [cell_id for cell_id in actual_cell_ids if not CELL_ID_PATTERN.match(cell_id)]
+        invalid_ids = [cell_id for cell_id in actual_cell_ids if cell_id and not CELL_ID_PATTERN.match(cell_id)]
         if invalid_ids:
             issues.append(
                 f"{entry.notebook_path}: todos los ids de celda deben ser slugs descriptivos y estables ({invalid_ids})."
@@ -350,13 +418,15 @@ def _check_notebook() -> list[str]:
         for snippet in NOTEBOOK_FORBIDDEN_SNIPPETS:
             if snippet in notebook_text:
                 issues.append(f"{entry.notebook_path}: el notebook no debe hacer ingesta online ({snippet}).")
+
     return issues
 
 
-def _check_generated_notebook_doc() -> list[str]:
+def _check_generated_notebook_doc(managed_notebooks: tuple[ManagedNotebook, ...] | None = None) -> list[str]:
     issues: list[str] = []
+    effective_managed_notebooks = managed_notebooks if managed_notebooks is not None else iter_managed_notebooks()
 
-    for entry in iter_managed_notebooks():
+    for entry in effective_managed_notebooks:
         if not entry.notebook_path.exists():
             continue
         issues.extend(check_generated_markdown_sync(entry.notebook_path, entry.doc_path))
@@ -370,11 +440,17 @@ def _check_required_paths(config) -> list[str]:
         PROJECT_ROOT / ".gitignore",
         PROJECT_ROOT / "pyproject.toml",
         PROJECT_ROOT / "requirements.txt",
+        PROJECT_GOVERNANCE_PATH,
         CONFIG_DIR / "ingestion.toml",
         KERNELSPEC_PATH,
+        PROJECT_ROOT / "scripts" / "scaffold-notebook.ps1",
+        PROJECT_ROOT / "scripts" / "sync-project.ps1",
+        PROJECT_ROOT / ".github" / "workflows" / "project-governance.yml",
         DATA_DIR / "bronze",
         DATA_DIR / "silver",
         DATA_DIR / "gold",
+        NOTEBOOKS_DIR,
+        NOTEBOOK_DOCS_DIR,
         LOGS_DIR / "ingestion",
         *config.iter_required_dirs(),
     ]
@@ -401,6 +477,11 @@ def main() -> int:
 
     if not _is_expected_python():
         issues.append(f"El interprete activo es '{sys.executable}' y no '{EXPECTED_PYTHON}'.")
+    if not _is_expected_python_version():
+        active_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        issues.append(
+            f"La version activa de Python es '{active_version}' y no '{EXPECTED_PYTHON_VERSION}'."
+        )
 
     for module_name in REQUIRED_IMPORTS:
         try:
@@ -414,29 +495,35 @@ def main() -> int:
     if KERNELSPEC_PATH.exists():
         kernel_payload = json.loads(KERNELSPEC_PATH.read_text(encoding="utf-8"))
         if kernel_payload.get("display_name") != EXPECTED_KERNEL_DISPLAY_NAME:
-            issues.append(
-                f"{KERNELSPEC_PATH}: display_name debe ser '{EXPECTED_KERNEL_DISPLAY_NAME}'."
-            )
+            issues.append(f"{KERNELSPEC_PATH}: display_name debe ser '{EXPECTED_KERNEL_DISPLAY_NAME}'.")
 
     if args.scope == "project":
+        managed_notebooks = iter_managed_notebooks()
         managed_paths = []
-        for entry in iter_managed_notebooks():
+        for entry in managed_notebooks:
             managed_paths.extend((entry.notebook_path, entry.doc_path))
         for path in (
             PROJECT_ROOT / "AGENTS.md",
             PROJECT_ROOT / "BITACORA_ENTORNO.md",
-            NOTEBOOK_DOCS_DIR,
+            NOTEBOOK_DOCS_DIR / "README.md",
             PROJECT_ROOT / "tests",
+            PROJECT_ROOT / "docs" / "guides" / "README.md",
             PROJECT_ROOT / "docs" / "guides" / "reglas-escalado-seguro.md",
             *managed_paths,
         ):
             if not path.exists():
                 issues.append(f"Falta la ruta requerida: {path}")
+
         issues.extend(_check_managed_datasets())
         issues.extend(_check_tracked_generated_artifacts())
         issues.extend(_local_notebook_checkpoint_issues())
-        issues.extend(_check_notebook())
-        issues.extend(_check_generated_notebook_doc())
+        issues.extend(_notebook_manifest_order_issues(managed_notebooks))
+        issues.extend(_unregistered_notebook_issues(managed_notebooks))
+        issues.extend(_orphan_notebook_doc_issues(managed_notebooks))
+        issues.extend(_check_notebook(managed_notebooks))
+        issues.extend(_check_generated_notebook_doc(managed_notebooks))
+        issues.extend(check_notebooks_index_sync(PROJECT_GOVERNANCE))
+        issues.extend(check_requirements_sync(PROJECT_ROOT / "pyproject.toml", PROJECT_ROOT / "requirements.txt"))
         issues.extend(_check_mojibake())
 
     if issues:

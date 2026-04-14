@@ -10,6 +10,7 @@ import re
 from football_ml.paths import (
     NOTEBOOK_CELLS_DOC_PATH,
     NOTEBOOK_PATH,
+    ManagedNotebook,
     ensure_dir,
     iter_managed_notebooks,
     relative_to_project,
@@ -35,13 +36,27 @@ def parse_args() -> ArgumentParser:
     return parser
 
 
-def _managed_notebook_doc_map() -> dict[Path, Path]:
-    return {entry.notebook_path.resolve(): entry.doc_path.resolve() for entry in iter_managed_notebooks()}
+def _effective_managed_notebooks(
+    managed_notebooks: tuple[ManagedNotebook, ...] | None = None,
+) -> tuple[ManagedNotebook, ...]:
+    return managed_notebooks if managed_notebooks is not None else iter_managed_notebooks()
 
 
-def resolve_output_path_for_notebook(notebook_path: Path) -> Path:
+def _managed_notebook_doc_map(
+    managed_notebooks: tuple[ManagedNotebook, ...] | None = None,
+) -> dict[Path, Path]:
+    return {
+        entry.notebook_path.resolve(): entry.doc_path.resolve()
+        for entry in _effective_managed_notebooks(managed_notebooks)
+    }
+
+
+def resolve_output_path_for_notebook(
+    notebook_path: Path,
+    managed_notebooks: tuple[ManagedNotebook, ...] | None = None,
+) -> Path:
     notebook_key = notebook_path.resolve()
-    managed_doc_map = _managed_notebook_doc_map()
+    managed_doc_map = _managed_notebook_doc_map(managed_notebooks)
 
     if notebook_key in managed_doc_map:
         return managed_doc_map[notebook_key]
@@ -258,10 +273,12 @@ def export_notebook_cells(notebook_path: Path = NOTEBOOK_PATH, output_path: Path
     return output_path
 
 
-def export_all_managed_notebooks() -> list[Path]:
+def export_all_managed_notebooks(
+    managed_notebooks: tuple[ManagedNotebook, ...] | None = None,
+) -> list[Path]:
     exported_paths: list[Path] = []
 
-    for entry in iter_managed_notebooks():
+    for entry in _effective_managed_notebooks(managed_notebooks):
         exported_paths.append(export_notebook_cells(entry.notebook_path, entry.doc_path))
 
     return exported_paths

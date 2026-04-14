@@ -15,9 +15,11 @@ La idea central es simple:
 
 - `AGENTS.md` define reglas operativas obligatorias.
 - `BITACORA_ENTORNO.md` registra comandos, cambios operativos y verificaciones reproducibles.
+- `config/project_governance.toml` define el entorno gobernado y el registro oficial de notebooks.
 - `docs/guides/*` explica como operar, continuar o escalar.
-- `docs/notebooks/*` solo replica notebooks oficiales.
+- `docs/notebooks/*` solo replica notebooks oficiales y `docs/notebooks/README.md` inventaria los registrados.
 - `src/football_ml/*` y `scripts/*` son la implementacion oficial.
+- `pyproject.toml` es la fuente primaria de dependencias directas y `requirements.txt` su salida sincronizada.
 
 Si una regla o un flujo aparece en dos lugares, uno debe quedar como fuente primaria y el otro debe referenciarlo, no reescribirlo con variaciones.
 
@@ -59,10 +61,12 @@ Excepcion transitoria actual:
 
 ## Notebooks oficiales
 
-- Solo son oficiales los notebooks registrados en `src/football_ml/paths.py`.
+- Solo son oficiales los notebooks registrados en `config/project_governance.toml`.
 - Todo notebook oficial nuevo requiere, en el mismo cambio:
-  - alta en el registro oficial
+  - alta en el manifiesto oficial
+  - scaffold o bootstrap comun del notebook
   - export a `docs/notebooks/..._cells.md`
+  - regeneracion de `docs/notebooks/README.md`
   - validacion estructural
   - actualizacion de la guia operativa impactada
 - Los notebooks oficiales no son duenios de ingesta online.
@@ -71,6 +75,7 @@ Excepcion transitoria actual:
 ## Configuracion y parametrizacion
 
 - Los paths oficiales, temporadas, nombres de tareas y valores operativos variables viven en config o en registros oficiales de codigo.
+- `project_governance.toml` debe gobernar kernel, Python, rutas de notebooks e inventario de notebooks oficiales.
 - No hardcodear nuevos paths oficiales dentro de notebooks.
 - Si aparece un segundo workflow o dataset, separar su config en nuevas secciones o archivos antes de repetir claves ambiguas.
 
@@ -90,6 +95,7 @@ Cada cambio debe revisar su impacto en:
 Si una de esas secciones cambia de hecho y no se actualiza, el cambio queda incompleto.
 
 El chequeo anti-mojibake es obligatorio en cada cambio.
+La resincronizacion con `.\scripts\sync-project.ps1` forma parte del cierre cuando se toca un notebook oficial, el manifiesto o las dependencias directas.
 
 ## Testing para escalar
 
@@ -102,11 +108,13 @@ Cobertura minima actual recomendada:
 
 - carga de config
 - registro de notebooks oficiales
+- manifiesto de gobernanza e inventario de notebooks
 - contratos de datasets oficiales
 - lectura CSV con fallback de encoding
 - manifests Bronze
 - fallback manual y caso provider unavailable
 - desalineacion notebook/export Markdown
+- desalineacion `pyproject.toml` / `requirements.txt`
 - artefactos generados trackeados por error
 
 No agregar tests que requieran internet para el camino normal del proyecto.

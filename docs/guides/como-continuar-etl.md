@@ -293,12 +293,15 @@ Tomar `notebooks/01_explorer_matchhistory.ipynb` como referencia estructural par
 Eso implica:
 
 - nombre `NN_<etapa>_<tema>.ipynb`
+- alta en `config/project_governance.toml`
+- scaffold preferente con `.\scripts\scaffold-notebook.ps1`
 - kernel `football-ml (.venv)`
 - primera celda con bootstrap comun del proyecto
 - celdas con encabezados numerados y comentario explicativo
 - IDs de celda descriptivos y estables
 - export obligatorio a `docs/notebooks/..._cells.md`
-- si cambia codigo u output guardado del notebook, el export Markdown debe regenerarse
+- inclusion automatica en `docs/notebooks/README.md`
+- si cambia codigo u output guardado del notebook, ejecutar `.\scripts\sync-project.ps1`
 - validacion final con `.\scripts\validate-project.ps1 -Scope project`
 
 ## Nota de escalado

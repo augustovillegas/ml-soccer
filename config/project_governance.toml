@@ -1,0 +1,28 @@
+[environment]
+python_version = "3.13"
+kernel_name = "football-ml"
+kernel_display_name = "football-ml (.venv)"
+notebooks_dir = "notebooks"
+notebook_docs_dir = "docs/notebooks"
+
+[[notebooks]]
+notebook_id = "explorer_matchhistory"
+order = 1
+stage = "explorer"
+topic = "matchhistory"
+path = "notebooks/01_explorer_matchhistory.ipynb"
+doc_path = "docs/notebooks/01_explorer_matchhistory_cells.md"
+template_profile = "official_v1"
+source_dataset_ids = []
+output_dataset_ids = ["matchhistory_bronze_matches"]
+
+[[notebooks]]
+notebook_id = "silver_matchhistory"
+order = 2
+stage = "silver"
+topic = "matchhistory"
+path = "notebooks/02_silver_matchhistory.ipynb"
+doc_path = "docs/notebooks/02_silver_matchhistory_cells.md"
+template_profile = "official_v1"
+source_dataset_ids = ["matchhistory_bronze_matches"]
+output_dataset_ids = ["matchhistory_silver_matches"]

@@ -3,11 +3,8 @@ from pathlib import Path
 import pytest
 
 from football_ml.config import load_ingestion_config
-from football_ml.paths import (
-    PROJECT_ROOT,
-    iter_managed_datasets,
-    iter_managed_notebooks,
-)
+from football_ml.governance import load_project_governance
+from football_ml.paths import PROJECT_ROOT, iter_managed_datasets, iter_managed_notebooks
 
 
 def test_load_ingestion_config_resolves_project_paths() -> None:
@@ -20,7 +17,20 @@ def test_load_ingestion_config_resolves_project_paths() -> None:
     assert config.manifest_dir == PROJECT_ROOT / "data" / "bronze" / "matchhistory" / "manifests"
 
 
-def test_managed_notebooks_have_registered_docs_and_ids() -> None:
+def test_project_governance_loads_environment_and_registered_notebooks() -> None:
+    governance = load_project_governance()
+
+    assert governance.environment.python_version == "3.13"
+    assert governance.environment.kernel_name == "football-ml"
+    assert governance.environment.kernel_display_name == "football-ml (.venv)"
+    assert governance.environment.notebooks_dir == PROJECT_ROOT / "notebooks"
+    assert governance.environment.notebook_docs_dir == PROJECT_ROOT / "docs" / "notebooks"
+
+    notebook_ids = [entry.notebook_id for entry in governance.notebooks]
+    assert notebook_ids == ["explorer_matchhistory", "silver_matchhistory"]
+
+
+def test_managed_notebooks_have_registered_metadata() -> None:
     notebooks = iter_managed_notebooks()
 
     assert len(notebooks) == 2
@@ -28,8 +38,12 @@ def test_managed_notebooks_have_registered_docs_and_ids() -> None:
     for notebook in notebooks:
         assert notebook.notebook_path.suffix == ".ipynb"
         assert notebook.doc_path.name.endswith("_cells.md")
-        assert notebook.expected_cell_ids
-        assert all("-" in cell_id or cell_id.isalnum() for cell_id in notebook.expected_cell_ids)
+        assert notebook.order >= 1
+        assert notebook.notebook_id
+        assert notebook.stage
+        assert notebook.topic
+        assert notebook.template_profile == "official_v1"
+        assert notebook.notebook_path.name.startswith(f"{notebook.order:02d}_")
 
 
 def test_managed_datasets_define_scalable_contracts() -> None:

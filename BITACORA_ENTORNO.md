@@ -805,3 +805,42 @@ Resultado esperado:
 
 - `01` y `02` quedan alineados bajo el mismo criterio de respaldo oficial.
 - Los archivos `*-checkpoint.ipynb` dejan de considerarse parte aceptable del estado local del proyecto.
+
+### 34. Gobernar notebooks oficiales, sincronizar artefactos y dejar el bootstrap apto para CI
+
+Comandos:
+
+```powershell
+.\scripts\sync-project.ps1
+.\scripts\sync-project.ps1 -Check
+.\scripts\bootstrap.ps1 -SkipScheduledTask
+.\scripts\validate-project.ps1 -Scope project
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Objetivo:
+
+- Pasar la gobernanza de notebooks y entorno a una fuente declarativa unica en `config\project_governance.toml`.
+- Dejar `sync-project.ps1` como interfaz oficial para regenerar exports de notebooks, el inventario `docs\notebooks\README.md` y la sincronizacion entre `pyproject.toml` y `requirements.txt`.
+- Dejar `bootstrap.ps1 -SkipScheduledTask` apto para CI en `windows-latest` sin registrar `schtasks`.
+- Validar que el proyecto falla si aparecen notebooks no registrados, exports huerfanos, ordenes duplicados o drift entre notebook, docs, dependencias y entorno.
+
+Cambio aplicado:
+
+- Se agrego `config\project_governance.toml` como fuente primaria del kernel, la version de Python y el registro oficial de notebooks.
+- `src\football_ml\paths.py` y `src\football_ml\validate.py` dejaron de hardcodear `01` y `02`; ahora cargan el manifiesto y validan reglas genericas y escalables.
+- Se agregaron `.\scripts\scaffold-notebook.ps1` y `src\football_ml\scaffold_notebook.py` para dar de alta notebooks oficiales con el proximo prefijo `NN`, registrar el manifiesto y sincronizar sus artefactos.
+- Se agregaron `.\scripts\sync-project.ps1` y `src\football_ml\sync_project.py` para regenerar backups Markdown, inventario de notebooks y `requirements.txt`.
+- `bootstrap.ps1` ahora admite `-SkipScheduledTask` para uso en CI y sigue validando el proyecto al final del setup.
+- Se agrego `.github\workflows\project-governance.yml` para ejecutar bootstrap, validacion estructural y tests en GitHub Actions sobre `windows-latest`.
+
+Verificacion minima:
+
+- `.\scripts\sync-project.ps1 -Check` pasa sin drift.
+- `.\scripts\bootstrap.ps1 -SkipScheduledTask` termina sin intentar registrar tareas programadas.
+- `.\scripts\validate-project.ps1 -Scope project` pasa usando el manifiesto como fuente oficial.
+- `.\.venv\Scripts\python.exe -m pytest` pasa con tests de manifiesto, scaffold, sincronizacion y validacion.
+
+Nota de correccion:
+
+- La primera version de la nueva regla de checkpoints tambien inspeccionaba `.pytest_tmp`; se corrigio para ignorar temporales de test y seguir fallando solo por checkpoints reales del proyecto.

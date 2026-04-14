@@ -1,0 +1,33 @@
+name: project-governance
+
+on:
+  push:
+    branches:
+      - master
+      - "codex/**"
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Bootstrap project
+        shell: pwsh
+        run: .\scripts\bootstrap.ps1 -SkipScheduledTask
+
+      - name: Validate project structure
+        shell: pwsh
+        run: .\scripts\validate-project.ps1 -Scope project
+
+      - name: Run tests
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe -m pytest

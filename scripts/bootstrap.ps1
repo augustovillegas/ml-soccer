@@ -1,15 +1,43 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$SkipScheduledTask
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+function Get-GovernanceStringValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Content,
+        [Parameter(Mandatory = $true)]
+        [string]$Key
+    )
+
+    $pattern = "(?m)^\s*$([regex]::Escape($Key))\s*=\s*""([^""]+)""\s*$"
+    $match = [regex]::Match($Content, $pattern)
+    if (-not $match.Success) {
+        throw "No se pudo leer '$Key' desde config\\project_governance.toml."
+    }
+    return $match.Groups[1].Value
+}
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $venvDir = Join-Path $projectRoot ".venv"
 $venvPython = Join-Path $venvDir "Scripts\\python.exe"
 $srcPath = Join-Path $projectRoot "src"
 $refreshScript = Join-Path $projectRoot "scripts\\refresh-matchhistory.ps1"
+$governanceConfigPath = Join-Path $projectRoot "config\\project_governance.toml"
 $taskConfigJson = $null
+
+if (-not (Test-Path $governanceConfigPath)) {
+    throw "No existe '$governanceConfigPath'."
+}
+
+$governanceContent = Get-Content -LiteralPath $governanceConfigPath -Raw -Encoding UTF8
+$pythonVersion = Get-GovernanceStringValue -Content $governanceContent -Key "python_version"
+$kernelName = Get-GovernanceStringValue -Content $governanceContent -Key "kernel_name"
+$kernelDisplayName = Get-GovernanceStringValue -Content $governanceContent -Key "kernel_display_name"
 
 if (-not (Test-Path $venvPython)) {
     if (Test-Path $venvDir) {
@@ -18,10 +46,10 @@ if (-not (Test-Path $venvPython)) {
 
     $pyCommand = Get-Command py -ErrorAction SilentlyContinue
     if (-not $pyCommand) {
-        throw "No se encontro el lanzador 'py'. Instala Python 3.13 o crea '.venv' manualmente."
+        throw "No se encontro el lanzador 'py'. Instala Python $pythonVersion o crea '.venv' manualmente."
     }
 
-    & py -3.13 -m venv $venvDir
+    & py "-$pythonVersion" -m venv $venvDir
 }
 
 New-Item -ItemType Directory -Force -Path `
@@ -30,6 +58,7 @@ New-Item -ItemType Directory -Force -Path `
     (Join-Path $projectRoot "data\\bronze\\matchhistory\\manifests"), `
     (Join-Path $projectRoot "data\\silver"), `
     (Join-Path $projectRoot "data\\gold"), `
+    (Join-Path $projectRoot "docs\\notebooks"), `
     (Join-Path $projectRoot "logs\\ingestion"), `
     (Join-Path $projectRoot "models"), `
     (Join-Path $projectRoot "notebooks") | Out-Null
@@ -49,9 +78,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "Fallo la instalacion editable del paquete local 'football-ml'."
 }
 
-& $venvPython -m ipykernel install --prefix $venvDir --name football-ml --display-name "football-ml (.venv)"
+& $venvPython -m ipykernel install --prefix $venvDir --name $kernelName --display-name $kernelDisplayName
 if ($LASTEXITCODE -ne 0) {
-    throw "Fallo el registro del kernel 'football-ml (.venv)'."
+    throw "Fallo el registro del kernel '$kernelDisplayName'."
 }
 
 if ([string]::IsNullOrWhiteSpace($env:PYTHONPATH)) {
@@ -63,6 +92,10 @@ if ([string]::IsNullOrWhiteSpace($env:PYTHONPATH)) {
 & (Join-Path $PSScriptRoot "validate-project.ps1") -Scope project
 if ($LASTEXITCODE -ne 0) {
     throw "La validacion final del proyecto fallo."
+}
+
+if ($SkipScheduledTask) {
+    return
 }
 
 $taskConfigJson = & $venvPython -c "from football_ml.config import load_automation_config; import json; cfg = load_automation_config(); print(json.dumps({'task_name': cfg.task_name, 'schedule_time': cfg.schedule_time}))"
