@@ -748,3 +748,34 @@ Objetivo:
 Verificacion minima:
 
 - La suite pasa sin depender de internet.
+
+### 32. Optimizar el tiempo de los tests sin cambiar su cobertura funcional
+
+Comandos:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest --durations=10 -q
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Objetivo:
+
+- Medir los tests mas lentos y eliminar trabajo innecesario en las pruebas unitarias.
+- Restringir el discovery de `pytest` a `tests/` para que no recorra el resto del repositorio.
+
+Cambio aplicado:
+
+- `pyproject.toml` ahora fija `testpaths = ["tests"]`.
+- `tests\test_validate_rules.py` deja de escribir y leer un Parquet temporal en la prueba de rechazo de `silver` en raiz; esa prueba ahora usa un archivo placeholder y mockea `_read_dataset_frame`, porque el objetivo es validar la regla estructural y no el backend de I/O.
+
+Verificacion minima:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest --durations=10 -q
+```
+
+Resultado esperado:
+
+- La suite sigue pasando completa.
+- El test `test_validate_managed_dataset_rejects_new_silver_stage_root_file` baja su costo al evitar I/O Parquet innecesario.
+- `pytest` concentra el discovery en `tests/`.

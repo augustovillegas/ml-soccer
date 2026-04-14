@@ -24,6 +24,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "--basetemp=.pytest_tmp"
+testpaths = ["tests"]
 markers = [
   "smoke: pruebas offline contra datos locales ya persistidos",
 ]

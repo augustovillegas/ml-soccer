@@ -96,12 +96,17 @@ def test_validate_managed_dataset_rejects_new_silver_stage_root_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     dataset_root = tmp_path / "data"
-    dataset_path = dataset_root / "silver" / "future_matches.parquet"
+    dataset_path = dataset_root / "silver" / "future_matches.csv"
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(
-        [{"game_key": "2021-08-13 Brentford-Arsenal", "Date": "2021-08-13", "FTR": "H"}]
-    ).to_parquet(dataset_path, index=False)
+    dataset_path.write_text("placeholder\n", encoding="utf-8")
     monkeypatch.setattr(validate_module, "DATA_DIR", dataset_root)
+    monkeypatch.setattr(
+        validate_module,
+        "_read_dataset_frame",
+        lambda _: pd.DataFrame(
+            [{"game_key": "2021-08-13 Brentford-Arsenal", "Date": "2021-08-13", "FTR": "H"}]
+        ),
+    )
 
     dataset = ManagedDataset(
         dataset_id="future_silver_matches",
