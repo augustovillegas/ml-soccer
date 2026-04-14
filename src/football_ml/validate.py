@@ -87,6 +87,22 @@ def _check_mojibake() -> list[str]:
     return issues
 
 
+def _local_notebook_checkpoint_issues() -> list[str]:
+    issues: list[str] = []
+    for checkpoint_dir in PROJECT_ROOT.rglob(".ipynb_checkpoints"):
+        if not checkpoint_dir.is_dir():
+            continue
+        if ".venv" in checkpoint_dir.parts:
+            continue
+        relative_dir = relative_to_project(checkpoint_dir)
+        checkpoint_files = sorted(path.name for path in checkpoint_dir.iterdir() if path.is_file())
+        details = f" ({', '.join(checkpoint_files)})" if checkpoint_files else ""
+        issues.append(
+            f"{relative_dir}: los checkpoints locales de notebook no forman parte del flujo oficial y deben eliminarse{details}."
+        )
+    return issues
+
+
 def _read_dataset_frame(path: Path) -> pd.DataFrame:
     if path.suffix.lower() == ".parquet":
         return pd.read_parquet(path)
@@ -418,6 +434,7 @@ def main() -> int:
                 issues.append(f"Falta la ruta requerida: {path}")
         issues.extend(_check_managed_datasets())
         issues.extend(_check_tracked_generated_artifacts())
+        issues.extend(_local_notebook_checkpoint_issues())
         issues.extend(_check_notebook())
         issues.extend(_check_generated_notebook_doc())
         issues.extend(_check_mojibake())

@@ -779,3 +779,29 @@ Resultado esperado:
 - La suite sigue pasando completa.
 - El test `test_validate_managed_dataset_rejects_new_silver_stage_root_file` baja su costo al evitar I/O Parquet innecesario.
 - `pytest` concentra el discovery en `tests/`.
+
+### 33. Alinear los notebooks oficiales y eliminar checkpoints locales fuera del flujo
+
+Comandos:
+
+```powershell
+Remove-Item -LiteralPath .\.ipynb_checkpoints -Recurse -Force
+Remove-Item -LiteralPath .\notebooks\.ipynb_checkpoints -Recurse -Force
+.\scripts\validate-project.ps1 -Scope project
+```
+
+Objetivo:
+
+- Eliminar checkpoints locales de Jupyter que no son backups oficiales del proyecto.
+- Dejar un unico criterio de respaldo para notebooks oficiales: `docs\notebooks\*_cells.md`.
+- Hacer que la validacion estructural falle si reaparecen checkpoints locales fuera de `.venv`.
+
+Verificacion minima:
+
+- No existen `.ipynb_checkpoints` en la raiz del proyecto ni dentro de `notebooks`.
+- `.\scripts\validate-project.ps1 -Scope project` pasa con el workspace limpio.
+
+Resultado esperado:
+
+- `01` y `02` quedan alineados bajo el mismo criterio de respaldo oficial.
+- Los archivos `*-checkpoint.ipynb` dejan de considerarse parte aceptable del estado local del proyecto.

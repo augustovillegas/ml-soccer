@@ -8,6 +8,7 @@ from football_ml.export_notebook_cells import check_generated_markdown_sync, ren
 from football_ml.paths import ManagedDataset, iter_managed_datasets
 import football_ml.validate as validate_module
 from football_ml.validate import (
+    _local_notebook_checkpoint_issues,
     _tracked_generated_artifact_issues,
     _validate_managed_dataset,
 )
@@ -89,6 +90,22 @@ def test_tracked_generated_artifact_issues_detect_forbidden_paths() -> None:
     assert all(not issue.startswith("data/bronze/matchhistory/raw/eng_premier_league_2122.csv") for issue in issues)
     assert all(not issue.startswith("data/bronze/matchhistory/manifests/eng_premier_league_2122.json") for issue in issues)
     assert all(not issue.startswith("data/silver/matches_silver.parquet") for issue in issues)
+
+
+def test_local_notebook_checkpoint_issues_detect_untracked_checkpoints(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint_dir = tmp_path / "notebooks" / ".ipynb_checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    (checkpoint_dir / "02_silver_matchhistory-checkpoint.ipynb").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(validate_module, "PROJECT_ROOT", tmp_path)
+
+    issues = _local_notebook_checkpoint_issues()
+
+    assert len(issues) == 1
+    assert "notebooks" in issues[0]
+    assert "02_silver_matchhistory-checkpoint.ipynb" in issues[0]
 
 
 def test_validate_managed_dataset_rejects_new_silver_stage_root_file(
