@@ -1,6 +1,6 @@
 # Bitacora de entorno y comandos
 
-> Archivo generado automaticamente desde `config/project_governance.toml + logs/governance/command-ledger.jsonl`.
+> Archivo generado automaticamente desde `config/project_governance.toml`.
 
 ## Criterio operativo
 
@@ -31,7 +31,7 @@ Artefactos impactados:
 - `.githooks`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `si`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `bootstrap_project`.
 
 ### 2. `validate_project`
 
@@ -51,7 +51,7 @@ Artefactos impactados:
 
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `si`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `validate_project`.
 
 ### 3. `sync_project`
 
@@ -78,7 +78,7 @@ Artefactos impactados:
 - `requirements.txt`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `si`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `sync_project`.
 
 ### 4. `scaffold_notebook`
 
@@ -103,7 +103,7 @@ Artefactos impactados:
 - `BITACORA_ENTORNO.md`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `no`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `scaffold_notebook`.
 
 ### 5. `export_notebook_cells`
 
@@ -124,7 +124,7 @@ Artefactos impactados:
 - `docs/notebooks/*_cells.md`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `no`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `export_notebook_cells`.
 
 ### 6. `ingest_matchhistory`
 
@@ -148,7 +148,7 @@ Artefactos impactados:
 - `BITACORA_ENTORNO.md`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `no`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `ingest_matchhistory`.
 
 ### 7. `refresh_matchhistory`
 
@@ -172,7 +172,7 @@ Artefactos impactados:
 - `BITACORA_ENTORNO.md`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `no`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `refresh_matchhistory`.
 
 ### 8. `watch_project`
 
@@ -196,4 +196,4 @@ Artefactos impactados:
 - `BITACORA_ENTORNO.md`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `no`.
+Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `watch_project`.

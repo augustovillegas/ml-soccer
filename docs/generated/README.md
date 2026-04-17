@@ -9,7 +9,7 @@
 - Path: `BITACORA_ENTORNO.md`
 - Generator: `render_bitacora`
 - Doc class: `ledger`
-- Sources: `config/project_governance.toml, logs/governance/command-ledger.jsonl`
+- Sources: `config/project_governance.toml`
 
 ## `generated_docs_inventory`
 

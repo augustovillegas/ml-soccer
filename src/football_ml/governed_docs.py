@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from football_ml.command_ledger import latest_success_events_by_command, read_command_ledger
 from football_ml.config import load_automation_config, load_ingestion_config
 from football_ml.governance import GeneratedDoc, ProjectGovernance, load_project_governance
 from football_ml.paths import iter_managed_datasets, relative_to_project
@@ -102,14 +101,12 @@ def _matchhistory_manifest_rows() -> list[str]:
 
 
 def render_bitacora(governance: ProjectGovernance) -> str:
-    events = read_command_ledger()
-    successful_events = latest_success_events_by_command(events)
     lines = [
         "# Bitacora de entorno y comandos",
         "",
         * _doc_header_line(
             governance.project_root / "BITACORA_ENTORNO.md",
-            "config/project_governance.toml + logs/governance/command-ledger.jsonl",
+            "config/project_governance.toml",
         ),
         "## Criterio operativo",
         "",
@@ -123,7 +120,6 @@ def render_bitacora(governance: ProjectGovernance) -> str:
     ]
 
     for command in governance.official_commands:
-        evidence = "si" if command.command_id in successful_events else "no"
         lines.extend(
             [
                 f"### {command.order}. `{command.command_id}`",
@@ -151,7 +147,7 @@ def render_bitacora(governance: ProjectGovernance) -> str:
         lines.extend(
             [
                 "",
-                f"Evidencia local de una ejecucion satisfactoria: `{evidence}`.",
+                f"Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `{command.command_id}`.",
                 "",
             ]
         )

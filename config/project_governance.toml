@@ -115,7 +115,7 @@ doc_id = "bitacora_entorno"
 path = "BITACORA_ENTORNO.md"
 generator = "render_bitacora"
 doc_class = "ledger"
-source_paths = ["config/project_governance.toml", "logs/governance/command-ledger.jsonl"]
+source_paths = ["config/project_governance.toml"]
 
 [[generated_docs]]
 doc_id = "generated_docs_inventory"

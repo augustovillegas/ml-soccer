@@ -6,7 +6,6 @@ import pytest
 
 from football_ml.governance import load_project_governance
 from football_ml.governed_docs import check_generated_docs_sync, generated_doc_ids_for_changed_paths, render_bitacora
-from football_ml.command_ledger import CommandLedgerEvent
 from football_ml.scaffold_notebook import scaffold_notebook
 from football_ml.sync_project import check_notebooks_index_sync, check_requirements_sync, render_notebooks_index
 
@@ -178,29 +177,15 @@ def test_generated_doc_ids_for_changed_paths_match_operational_sources() -> None
     assert "project_status_doc" in doc_ids
 
 
-def test_render_bitacora_uses_ledger_evidence(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_render_bitacora_is_deterministic_and_references_ledger() -> None:
     governance = load_project_governance()
-
-    monkeypatch.setattr(
-        "football_ml.governed_docs.read_command_ledger",
-        lambda: (
-            CommandLedgerEvent(
-                timestamp_utc="2026-04-17T12:00:00Z",
-                command_id="sync_project",
-                command=".\u005cscripts\u005csync-project.ps1",
-                normalized_args=(),
-                goal="sync",
-                status="ok",
-                verification="done",
-                artifacts_updated=(),
-                error_message=None,
-            ),
-        ),
-    )
 
     rendered = render_bitacora(governance)
 
     assert "### 3. `sync_project`" in rendered
-    assert "Evidencia local de una ejecucion satisfactoria: `si`." in rendered
+    assert "> Archivo generado automaticamente desde `config/project_governance.toml`." in rendered
+    assert (
+        "Evidencia auditada: consultar `logs/governance/command-ledger.jsonl` para `sync_project`."
+        in rendered
+    )
+    assert "Evidencia local de una ejecucion satisfactoria:" not in rendered
