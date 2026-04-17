@@ -140,7 +140,40 @@ function Write-CommandLedgerEvent {
         $payload.error_message = $ErrorMessage
     }
 
-    Add-Content -LiteralPath $script:CommandLedgerPath -Value (($payload | ConvertTo-Json -Compress) + [Environment]::NewLine) -Encoding UTF8
+    $maxAttempts = 10
+    $attempt = 0
+    $sleepMilliseconds = 100
+    $serializedPayload = ($payload | ConvertTo-Json -Compress)
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+    while ($attempt -lt $maxAttempts) {
+        $attempt += 1
+        $stream = $null
+        $writer = $null
+        try {
+            $stream = [System.IO.FileStream]::new(
+                $script:CommandLedgerPath,
+                [System.IO.FileMode]::Append,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::ReadWrite
+            )
+            $writer = [System.IO.StreamWriter]::new($stream, $utf8NoBom)
+            $writer.WriteLine($serializedPayload)
+            $writer.Flush()
+            return
+        } catch [System.IO.IOException] {
+            if ($attempt -ge $maxAttempts) {
+                throw
+            }
+            Start-Sleep -Milliseconds $sleepMilliseconds
+        } finally {
+            if ($writer) {
+                $writer.Dispose()
+            } elseif ($stream) {
+                $stream.Dispose()
+            }
+        }
+    }
 }
 
 function Invoke-ProjectAutoSync {
@@ -169,6 +202,9 @@ function Invoke-ProjectAutoSync {
     $env:FOOTBALL_ML_SUPPRESS_GOVERNED_SYNC = "1"
     try {
         & $script:VenvPython @arguments | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "La resincronizacion automatica gobernada fallo."
+        }
     } finally {
         if ($null -eq $previousValue) {
             Remove-Item Env:FOOTBALL_ML_SUPPRESS_GOVERNED_SYNC -ErrorAction SilentlyContinue

@@ -24,6 +24,10 @@ jobs:
         shell: pwsh
         run: .\scripts\bootstrap.ps1 -SkipScheduledTask
 
+      - name: Sync governed artifacts
+        shell: pwsh
+        run: .\scripts\sync-project.ps1
+
       - name: Validate project structure
         shell: pwsh
         run: .\scripts\validate-project.ps1 -Scope project

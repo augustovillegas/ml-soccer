@@ -150,6 +150,26 @@ def test_bootstrap_script_supports_skip_scheduled_task() -> None:
     assert "core.hooksPath .githooks" in script_text
 
 
+def test_project_governance_workflow_syncs_before_validate() -> None:
+    workflow_text = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "project-governance.yml"
+    ).read_text(encoding="utf-8")
+
+    sync_step = "run: .\\scripts\\sync-project.ps1"
+    validate_step = "run: .\\scripts\\validate-project.ps1 -Scope project"
+
+    assert sync_step in workflow_text
+    assert validate_step in workflow_text
+    assert workflow_text.index(sync_step) < workflow_text.index(validate_step)
+
+
+def test_pre_commit_hook_passes_changed_paths_as_array() -> None:
+    hook_text = (Path(__file__).resolve().parents[1] / ".githooks" / "pre-commit.ps1").read_text(encoding="utf-8")
+
+    assert "& $syncScript -ChangedPath $changedPaths" in hook_text
+    assert '@("-ChangedPath", $changedPath.Trim())' not in hook_text
+
+
 def test_generated_doc_ids_for_changed_paths_match_operational_sources() -> None:
     governance = load_project_governance()
 

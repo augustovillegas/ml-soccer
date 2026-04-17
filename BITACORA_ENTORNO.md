@@ -31,7 +31,7 @@ Artefactos impactados:
 - `.githooks`
 - `logs/governance/command-ledger.jsonl`
 
-Evidencia local de una ejecucion satisfactoria: `no`.
+Evidencia local de una ejecucion satisfactoria: `si`.
 
 ### 2. `validate_project`
 
