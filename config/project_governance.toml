@@ -5,6 +5,139 @@ kernel_display_name = "football-ml (.venv)"
 notebooks_dir = "notebooks"
 notebook_docs_dir = "docs/notebooks"
 
+[watcher]
+debounce_seconds = 1.5
+watched_paths = ["config", "docs/guides", "notebooks", "scripts", "src/football_ml", "pyproject.toml", "data/bronze/matchhistory/manifests", "data/bronze/matchhistory/raw", "data/silver", "logs/governance/command-ledger.jsonl"]
+
+[[watcher.rules]]
+rule_id = "notebook_sources"
+patterns = ["notebooks/*.ipynb"]
+actions = ["notebook_exports_changed", "generated_docs", "quick_validate"]
+
+[[watcher.rules]]
+rule_id = "governance_manifest"
+patterns = ["config/project_governance.toml"]
+actions = ["notebook_exports_all", "notebooks_index", "generated_docs", "quick_validate"]
+
+[[watcher.rules]]
+rule_id = "dependency_manifest"
+patterns = ["pyproject.toml"]
+actions = ["requirements", "generated_docs", "quick_validate"]
+
+[[watcher.rules]]
+rule_id = "config_code_scripts"
+patterns = ["config/*.toml", "scripts/*.ps1", "src/football_ml/*.py", "src/football_ml/ingest/*.py", "docs/guides/*.md"]
+actions = ["generated_docs", "notebooks_index", "quick_validate"]
+
+[[watcher.rules]]
+rule_id = "operational_state"
+patterns = ["data/bronze/matchhistory/manifests", "data/bronze/matchhistory/manifests/*.json", "data/bronze/matchhistory/raw", "data/bronze/matchhistory/raw/*.csv", "data/bronze/matchhistory/raw/*.parquet", "data/silver", "data/silver/*.parquet", "logs/governance/command-ledger.jsonl"]
+actions = ["generated_docs", "quick_validate"]
+
+[doc_rules]
+allowed_doc_classes = ["generated", "guide", "notebook_export", "research", "ledger"]
+live_state_allowed_classes = ["generated", "ledger", "notebook_export"]
+
+[[official_commands]]
+order = 1
+command_id = "bootstrap_project"
+script_path = "scripts/bootstrap.ps1"
+purpose = "Preparar el entorno gobernado, instalar dependencias, registrar kernel y dejar hooks/configuracion base listas."
+verification = "El script termina sin errores y la validacion estructural final pasa."
+impacted_artifacts = [".venv", ".githooks", "logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[official_commands]]
+order = 2
+command_id = "validate_project"
+script_path = "scripts/validate-project.ps1"
+purpose = "Validar contratos, notebooks, documentacion generada, reglas de drift y consistencia estructural del proyecto."
+verification = "La salida contiene 'Project validation passed.' para el scope ejecutado."
+impacted_artifacts = ["logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[official_commands]]
+order = 3
+command_id = "sync_project"
+script_path = "scripts/sync-project.ps1"
+purpose = "Resincronizar artefactos generados, respaldos de notebooks, bitacora y dependencias derivadas."
+verification = "La salida confirma que los artefactos gobernados quedaron sincronizados."
+impacted_artifacts = ["BITACORA_ENTORNO.md", "docs/generated/README.md", "docs/generated/official-commands.md", "docs/generated/project-status.md", "docs/notebooks/README.md", "docs/notebooks/*_cells.md", "requirements.txt", "logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[official_commands]]
+order = 4
+command_id = "scaffold_notebook"
+script_path = "scripts/scaffold-notebook.ps1"
+purpose = "Crear un notebook oficial nuevo, registrarlo en el manifiesto y regenerar sus artefactos gobernados."
+verification = "El notebook nuevo queda registrado en config/project_governance.toml y sus docs generadas existen."
+impacted_artifacts = ["config/project_governance.toml", "notebooks", "docs/notebooks", "docs/generated", "BITACORA_ENTORNO.md", "logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[official_commands]]
+order = 5
+command_id = "export_notebook_cells"
+script_path = "scripts/export-notebook-cells.ps1"
+purpose = "Regenerar los exports Markdown de notebooks oficiales a partir de sus celdas y outputs guardados."
+verification = "Cada docs/notebooks/*_cells.md queda alineado con su notebook fuente."
+impacted_artifacts = ["docs/notebooks/*_cells.md", "logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[official_commands]]
+order = 6
+command_id = "ingest_matchhistory"
+script_path = "scripts/ingest-matchhistory.ps1"
+purpose = "Actualizar la ingesta bronze de MatchHistory con descarga automatica, fallback manual y manifests por temporada."
+verification = "La salida termina en 'Ingestion completed.' y los manifests quedan actualizados."
+impacted_artifacts = ["data/bronze/matchhistory/raw", "data/bronze/matchhistory/manifests", "docs/generated/project-status.md", "BITACORA_ENTORNO.md", "logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[official_commands]]
+order = 7
+command_id = "refresh_matchhistory"
+script_path = "scripts/refresh-matchhistory.ps1"
+purpose = "Ejecutar la validacion runtime y luego refrescar MatchHistory mediante el workflow oficial diario."
+verification = "La validacion runtime pasa y la ingesta concluye sin errores."
+impacted_artifacts = ["data/bronze/matchhistory/raw", "data/bronze/matchhistory/manifests", "docs/generated/project-status.md", "BITACORA_ENTORNO.md", "logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[official_commands]]
+order = 8
+command_id = "watch_project"
+script_path = "scripts/watch-project.ps1"
+purpose = "Levantar el watcher local para resincronizar artefactos gobernados casi en tiempo real."
+verification = "La consola informa que el watcher esta activo y resincroniza cambios detectados."
+impacted_artifacts = ["docs/generated", "docs/notebooks", "requirements.txt", "BITACORA_ENTORNO.md", "logs/governance/command-ledger.jsonl"]
+document_in_bitacora = true
+
+[[generated_docs]]
+doc_id = "bitacora_entorno"
+path = "BITACORA_ENTORNO.md"
+generator = "render_bitacora"
+doc_class = "ledger"
+source_paths = ["config/project_governance.toml", "logs/governance/command-ledger.jsonl"]
+
+[[generated_docs]]
+doc_id = "generated_docs_inventory"
+path = "docs/generated/README.md"
+generator = "render_generated_docs_index"
+doc_class = "generated"
+source_paths = ["config/project_governance.toml"]
+
+[[generated_docs]]
+doc_id = "official_commands_doc"
+path = "docs/generated/official-commands.md"
+generator = "render_official_commands_doc"
+doc_class = "generated"
+source_paths = ["config/project_governance.toml"]
+
+[[generated_docs]]
+doc_id = "project_status_doc"
+path = "docs/generated/project-status.md"
+generator = "render_project_status_doc"
+doc_class = "generated"
+source_paths = ["config/project_governance.toml", "config/ingestion.toml", "data/bronze/matchhistory/manifests", "data/bronze/matchhistory/manifests/*.json", "data/bronze/matchhistory/raw", "data/bronze/matchhistory/raw/*.csv", "data/bronze/matchhistory/raw/*.parquet", "data/silver", "data/silver/*.parquet"]
+
 [[notebooks]]
 notebook_id = "explorer_matchhistory"
 order = 1

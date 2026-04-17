@@ -6,10 +6,13 @@ import pandas as pd
 import pytest
 
 from football_ml.export_notebook_cells import check_generated_markdown_sync, render_markdown
+from football_ml.governance import OfficialCommand
 from football_ml.paths import ManagedDataset, iter_managed_datasets
 import football_ml.validate as validate_module
 from football_ml.validate import (
+    _manual_guide_live_state_issues,
     _local_notebook_checkpoint_issues,
+    _official_command_alignment_issues,
     _orphan_notebook_doc_issues,
     _tracked_generated_artifact_issues,
     _unregistered_notebook_issues,
@@ -184,6 +187,59 @@ def test_validate_managed_dataset_rejects_new_silver_stage_root_file(
     issues = _validate_managed_dataset(dataset)
 
     assert any("no deben vivir en la raiz" in issue for issue in issues)
+
+
+def test_manual_guide_live_state_issues_detect_forbidden_patterns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    guides_dir = docs_dir / "guides"
+    guides_dir.mkdir(parents=True, exist_ok=True)
+    (guides_dir / "como-continuar-etl.md").write_text(
+        "# Guia\n\n- 1140 partidos\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validate_module, "DOCS_DIR", docs_dir)
+    monkeypatch.setattr(
+        validate_module,
+        "doc_rules",
+        lambda: type("DocRules", (), {"live_state_allowed_classes": ()})(),
+    )
+
+    issues = _manual_guide_live_state_issues()
+
+    assert len(issues) == 1
+    assert "estado vivo derivable" in issues[0]
+
+
+def test_official_command_alignment_requires_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script_path = tmp_path / "scripts" / "demo.ps1"
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+    script_path.write_text("Write-Host 'demo'\n", encoding="utf-8")
+    monkeypatch.setattr(
+        validate_module,
+        "iter_official_commands",
+        lambda: (
+            OfficialCommand(
+                order=1,
+                command_id="demo_command",
+                script_path=script_path,
+                purpose="demo",
+                verification="ok",
+                impacted_artifacts=(),
+                document_in_bitacora=True,
+            ),
+        ),
+    )
+
+    issues = _official_command_alignment_issues()
+
+    assert len(issues) == 1
+    assert "demo_command" in issues[0]
 
 
 @pytest.mark.smoke

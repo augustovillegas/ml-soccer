@@ -4,7 +4,7 @@
 > Regenerar con `.\scripts\export-notebook-cells.ps1` cuando cambie el notebook fuente.
 
 <!-- notebook-source: notebooks/02_silver_matchhistory.ipynb -->
-<!-- notebook-code-and-outputs-sha256: 001cbeb2d8f57810df6e3cec674da91a44c19650a63aee18aa6d326bddb2eb4d -->
+<!-- notebook-code-and-outputs-sha256: 733d7b2fbba7d38e644b4966b52cd550cba231dc3bfac155e86bd9777d63a03c -->
 
 ## Cell 1 - imports-and-kernel-check
 
@@ -325,7 +325,7 @@ for column in df_silver.columns:
     print(f"  {column}")
 print()
 print("Notebook 02 completo.")
-print("Siguiente: Notebook 03 - ClubElo + join con Silver")
+print("Siguiente: consolidar Silver en codigo cuando deje de ser exploratoria")
 ```
 
 **Output 1:**
@@ -367,5 +367,5 @@ Columnas Silver:
   B365A
 
 Notebook 02 completo.
-Siguiente: Notebook 03 - ClubElo + join con Silver
+Siguiente: consolidar Silver en codigo cuando deje de ser exploratoria
 ```

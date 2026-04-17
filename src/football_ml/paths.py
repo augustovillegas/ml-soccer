@@ -1,12 +1,24 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from football_ml.governance import CONFIG_DIR, ManagedNotebook, PROJECT_ROOT, load_project_governance
+from football_ml.governance import (
+    CONFIG_DIR,
+    DocRules,
+    GeneratedDoc,
+    ManagedNotebook,
+    OfficialCommand,
+    PROJECT_ROOT,
+    WatcherConfig,
+    load_project_governance,
+)
 
 
 DATA_DIR = PROJECT_ROOT / "data"
 DOCS_DIR = PROJECT_ROOT / "docs"
+DOCS_GENERATED_DIR = DOCS_DIR / "generated"
 LOGS_DIR = PROJECT_ROOT / "logs"
+GOVERNANCE_LOGS_DIR = LOGS_DIR / "governance"
+COMMAND_LEDGER_PATH = GOVERNANCE_LOGS_DIR / "command-ledger.jsonl"
 INGESTION_LOGS_DIR = LOGS_DIR / "ingestion"
 MATCHHISTORY_DIR = DATA_DIR / "bronze" / "matchhistory"
 MATCHHISTORY_RAW_DIR = MATCHHISTORY_DIR / "raw"
@@ -19,6 +31,10 @@ PROJECT_GOVERNANCE = load_project_governance()
 GOVERNED_ENVIRONMENT = PROJECT_GOVERNANCE.environment
 NOTEBOOKS_DIR = GOVERNED_ENVIRONMENT.notebooks_dir
 NOTEBOOK_DOCS_DIR = GOVERNED_ENVIRONMENT.notebook_docs_dir
+WATCHER_CONFIG = PROJECT_GOVERNANCE.watcher
+OFFICIAL_COMMANDS = PROJECT_GOVERNANCE.official_commands
+GENERATED_DOCS = PROJECT_GOVERNANCE.generated_docs
+DOC_RULES = PROJECT_GOVERNANCE.doc_rules
 EXPECTED_PYTHON_VERSION = GOVERNED_ENVIRONMENT.python_version
 EXPECTED_PYTHON = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
 EXPECTED_KERNEL_NAME = GOVERNED_ENVIRONMENT.kernel_name
@@ -92,6 +108,22 @@ def ensure_dir(path: Path) -> Path:
 
 def iter_managed_notebooks() -> tuple[ManagedNotebook, ...]:
     return MANAGED_NOTEBOOKS
+
+
+def watcher_config() -> WatcherConfig:
+    return WATCHER_CONFIG
+
+
+def iter_official_commands() -> tuple[OfficialCommand, ...]:
+    return OFFICIAL_COMMANDS
+
+
+def iter_generated_docs() -> tuple[GeneratedDoc, ...]:
+    return GENERATED_DOCS
+
+
+def doc_rules() -> DocRules:
+    return DOC_RULES
 
 
 def managed_notebook_paths() -> tuple[Path, ...]:

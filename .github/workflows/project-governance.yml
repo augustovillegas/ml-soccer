@@ -28,6 +28,10 @@ jobs:
         shell: pwsh
         run: .\scripts\validate-project.ps1 -Scope project
 
+      - name: Check generated artifacts
+        shell: pwsh
+        run: .\scripts\sync-project.ps1 -Check
+
       - name: Run tests
         shell: pwsh
         run: .\.venv\Scripts\python.exe -m pytest

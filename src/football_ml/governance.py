@@ -11,6 +11,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = PROJECT_ROOT / "config"
 PROJECT_GOVERNANCE_PATH = CONFIG_DIR / "project_governance.toml"
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+WATCHER_ACTIONS = {
+    "generated_docs",
+    "notebook_exports_all",
+    "notebook_exports_changed",
+    "notebooks_index",
+    "quick_validate",
+    "requirements",
+}
+DEFAULT_DOC_CLASSES = ("generated", "guide", "notebook_export", "research", "ledger")
+DEFAULT_LIVE_STATE_ALLOWED_CLASSES = ("generated", "ledger", "notebook_export")
 
 
 @dataclass(frozen=True)
@@ -36,11 +46,55 @@ class ManagedNotebook:
 
 
 @dataclass(frozen=True)
+class WatcherRule:
+    rule_id: str
+    patterns: tuple[str, ...]
+    actions: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class WatcherConfig:
+    debounce_seconds: float
+    watched_paths: tuple[str, ...]
+    rules: tuple[WatcherRule, ...]
+
+
+@dataclass(frozen=True)
+class OfficialCommand:
+    order: int
+    command_id: str
+    script_path: Path
+    purpose: str
+    verification: str
+    impacted_artifacts: tuple[str, ...]
+    document_in_bitacora: bool
+
+
+@dataclass(frozen=True)
+class GeneratedDoc:
+    doc_id: str
+    path: Path
+    generator: str
+    doc_class: str
+    source_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class DocRules:
+    allowed_doc_classes: tuple[str, ...]
+    live_state_allowed_classes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ProjectGovernance:
     project_root: Path
     config_path: Path
     environment: GovernedEnvironment
     notebooks: tuple[ManagedNotebook, ...]
+    watcher: WatcherConfig
+    official_commands: tuple[OfficialCommand, ...]
+    generated_docs: tuple[GeneratedDoc, ...]
+    doc_rules: DocRules
 
 
 def slugify_token(value: str) -> str:
@@ -93,66 +147,213 @@ def _load_notebook(raw_notebook: dict[str, object], project_root: Path) -> Manag
     )
 
 
+def _load_watcher_rule(raw_rule: dict[str, object]) -> WatcherRule:
+    rule_id = _ensure_slug(str(raw_rule["rule_id"]), "watcher.rule_id")
+    patterns = tuple(str(item).strip() for item in raw_rule.get("patterns", []) if str(item).strip())
+    actions = tuple(str(item).strip() for item in raw_rule.get("actions", []) if str(item).strip())
+    return WatcherRule(rule_id=rule_id, patterns=patterns, actions=actions)
+
+
+def _load_watcher(raw_watcher: dict[str, object] | None) -> WatcherConfig:
+    watcher_data = raw_watcher or {}
+    watched_paths = tuple(
+        str(item).replace("\\", "/").strip()
+        for item in watcher_data.get("watched_paths", [])
+        if str(item).strip()
+    )
+    rules = tuple(_load_watcher_rule(item) for item in watcher_data.get("rules", []))
+    return WatcherConfig(
+        debounce_seconds=float(watcher_data.get("debounce_seconds", 1.5)),
+        watched_paths=watched_paths,
+        rules=rules,
+    )
+
+
+def _load_official_command(raw_command: dict[str, object], project_root: Path) -> OfficialCommand:
+    command_id = _ensure_slug(str(raw_command["command_id"]), "official_commands.command_id")
+    impacted_artifacts = tuple(
+        str(item).replace("\\", "/").strip()
+        for item in raw_command.get("impacted_artifacts", [])
+        if str(item).strip()
+    )
+    return OfficialCommand(
+        order=int(raw_command["order"]),
+        command_id=command_id,
+        script_path=_resolve_project_path(str(raw_command["script_path"]), project_root),
+        purpose=str(raw_command["purpose"]).strip(),
+        verification=str(raw_command["verification"]).strip(),
+        impacted_artifacts=impacted_artifacts,
+        document_in_bitacora=bool(raw_command.get("document_in_bitacora", False)),
+    )
+
+
+def _load_generated_doc(raw_doc: dict[str, object], project_root: Path) -> GeneratedDoc:
+    doc_id = _ensure_slug(str(raw_doc["doc_id"]), "generated_docs.doc_id")
+    doc_class = str(raw_doc["doc_class"]).strip()
+    source_paths = tuple(
+        str(item).replace("\\", "/").strip()
+        for item in raw_doc.get("source_paths", [])
+        if str(item).strip()
+    )
+    return GeneratedDoc(
+        doc_id=doc_id,
+        path=_resolve_project_path(str(raw_doc["path"]), project_root),
+        generator=str(raw_doc["generator"]).strip(),
+        doc_class=doc_class,
+        source_paths=source_paths,
+    )
+
+
+def _load_doc_rules(raw_doc_rules: dict[str, object] | None) -> DocRules:
+    doc_rules_data = raw_doc_rules or {}
+    allowed_doc_classes = tuple(
+        str(item).strip()
+        for item in doc_rules_data.get("allowed_doc_classes", DEFAULT_DOC_CLASSES)
+        if str(item).strip()
+    )
+    live_state_allowed_classes = tuple(
+        str(item).strip()
+        for item in doc_rules_data.get(
+            "live_state_allowed_classes",
+            DEFAULT_LIVE_STATE_ALLOWED_CLASSES,
+        )
+        if str(item).strip()
+    )
+    return DocRules(
+        allowed_doc_classes=allowed_doc_classes,
+        live_state_allowed_classes=live_state_allowed_classes,
+    )
+
+
 def _manifest_issues(governance: ProjectGovernance) -> list[str]:
     issues: list[str] = []
 
     if not governance.notebooks:
         issues.append("project_governance.toml debe registrar al menos un notebook oficial.")
-        return issues
+    else:
+        notebook_ids = [entry.notebook_id for entry in governance.notebooks]
+        orders = [entry.order for entry in governance.notebooks]
+        notebook_paths = [entry.notebook_path.resolve() for entry in governance.notebooks]
+        doc_paths = [entry.doc_path.resolve() for entry in governance.notebooks]
 
-    notebook_ids = [entry.notebook_id for entry in governance.notebooks]
-    orders = [entry.order for entry in governance.notebooks]
-    notebook_paths = [entry.notebook_path.resolve() for entry in governance.notebooks]
-    doc_paths = [entry.doc_path.resolve() for entry in governance.notebooks]
+        duplicate_ids = sorted({item for item in notebook_ids if notebook_ids.count(item) > 1})
+        if duplicate_ids:
+            issues.append(f"Los notebooks oficiales no deben repetir notebook_id: {duplicate_ids}.")
 
-    duplicate_ids = sorted({item for item in notebook_ids if notebook_ids.count(item) > 1})
-    if duplicate_ids:
-        issues.append(f"Los notebooks oficiales no deben repetir notebook_id: {duplicate_ids}.")
+        duplicate_orders = sorted({item for item in orders if orders.count(item) > 1})
+        if duplicate_orders:
+            issues.append(f"Los notebooks oficiales no deben repetir order: {duplicate_orders}.")
 
-    duplicate_orders = sorted({item for item in orders if orders.count(item) > 1})
-    if duplicate_orders:
-        issues.append(f"Los notebooks oficiales no deben repetir order: {duplicate_orders}.")
+        duplicate_notebook_paths = sorted(
+            {
+                str(path.relative_to(governance.project_root))
+                for path in notebook_paths
+                if notebook_paths.count(path) > 1
+            }
+        )
+        if duplicate_notebook_paths:
+            issues.append(f"Los notebooks oficiales no deben repetir path: {duplicate_notebook_paths}.")
 
-    duplicate_notebook_paths = sorted(
+        duplicate_doc_paths = sorted(
+            {
+                str(path.relative_to(governance.project_root))
+                for path in doc_paths
+                if doc_paths.count(path) > 1
+            }
+        )
+        if duplicate_doc_paths:
+            issues.append(f"Los notebooks oficiales no deben repetir doc_path: {duplicate_doc_paths}.")
+
+        for entry in governance.notebooks:
+            expected_prefix = f"{entry.order:02d}_"
+            if not entry.notebook_path.name.startswith(expected_prefix):
+                issues.append(
+                    f"{entry.notebook_path}: el nombre del notebook debe empezar con '{expected_prefix}'."
+                )
+            if entry.notebook_path.parent.resolve() != governance.environment.notebooks_dir.resolve():
+                issues.append(
+                    f"{entry.notebook_path}: todo notebook oficial debe vivir en '{governance.environment.notebooks_dir}'."
+                )
+            if entry.doc_path.parent.resolve() != governance.environment.notebook_docs_dir.resolve():
+                issues.append(
+                    f"{entry.doc_path}: todo export oficial debe vivir en '{governance.environment.notebook_docs_dir}'."
+                )
+            if entry.template_profile != "official_v1":
+                issues.append(
+                    f"{entry.notebook_id}: template_profile no soportado '{entry.template_profile}'."
+                )
+            if entry.order < 1:
+                issues.append(f"{entry.notebook_id}: order debe ser >= 1.")
+
+    command_ids = [entry.command_id for entry in governance.official_commands]
+    command_orders = [entry.order for entry in governance.official_commands]
+    command_paths = [entry.script_path.resolve() for entry in governance.official_commands]
+    duplicate_command_ids = sorted({item for item in command_ids if command_ids.count(item) > 1})
+    if duplicate_command_ids:
+        issues.append(f"Los comandos oficiales no deben repetir command_id: {duplicate_command_ids}.")
+    duplicate_command_orders = sorted({item for item in command_orders if command_orders.count(item) > 1})
+    if duplicate_command_orders:
+        issues.append(f"Los comandos oficiales no deben repetir order: {duplicate_command_orders}.")
+    duplicate_command_paths = sorted(
         {
             str(path.relative_to(governance.project_root))
-            for path in notebook_paths
-            if notebook_paths.count(path) > 1
+            for path in command_paths
+            if command_paths.count(path) > 1
         }
     )
-    if duplicate_notebook_paths:
-        issues.append(f"Los notebooks oficiales no deben repetir path: {duplicate_notebook_paths}.")
-
-    duplicate_doc_paths = sorted(
-        {
-            str(path.relative_to(governance.project_root))
-            for path in doc_paths
-            if doc_paths.count(path) > 1
-        }
-    )
-    if duplicate_doc_paths:
-        issues.append(f"Los notebooks oficiales no deben repetir doc_path: {duplicate_doc_paths}.")
-
-    for entry in governance.notebooks:
-        expected_prefix = f"{entry.order:02d}_"
-        if not entry.notebook_path.name.startswith(expected_prefix):
-            issues.append(
-                f"{entry.notebook_path}: el nombre del notebook debe empezar con '{expected_prefix}'."
-            )
-        if entry.notebook_path.parent.resolve() != governance.environment.notebooks_dir.resolve():
-            issues.append(
-                f"{entry.notebook_path}: todo notebook oficial debe vivir en '{governance.environment.notebooks_dir}'."
-            )
-        if entry.doc_path.parent.resolve() != governance.environment.notebook_docs_dir.resolve():
-            issues.append(
-                f"{entry.doc_path}: todo export oficial debe vivir en '{governance.environment.notebook_docs_dir}'."
-            )
-        if entry.template_profile != "official_v1":
-            issues.append(
-                f"{entry.notebook_id}: template_profile no soportado '{entry.template_profile}'."
-            )
+    if duplicate_command_paths:
+        issues.append(f"Los comandos oficiales no deben repetir script_path: {duplicate_command_paths}.")
+    for entry in governance.official_commands:
         if entry.order < 1:
-            issues.append(f"{entry.notebook_id}: order debe ser >= 1.")
+            issues.append(f"{entry.command_id}: order debe ser >= 1.")
+        if not entry.purpose:
+            issues.append(f"{entry.command_id}: purpose no puede ser vacio.")
+        if not entry.verification:
+            issues.append(f"{entry.command_id}: verification no puede ser vacio.")
+        if entry.script_path.suffix.lower() != ".ps1":
+            issues.append(f"{entry.command_id}: script_path debe apuntar a un .ps1 y no a '{entry.script_path}'.")
+
+    generated_doc_ids = [entry.doc_id for entry in governance.generated_docs]
+    generated_doc_paths = [entry.path.resolve() for entry in governance.generated_docs]
+    duplicate_generated_doc_ids = sorted(
+        {item for item in generated_doc_ids if generated_doc_ids.count(item) > 1}
+    )
+    if duplicate_generated_doc_ids:
+        issues.append(f"Los documentos generados no deben repetir doc_id: {duplicate_generated_doc_ids}.")
+    duplicate_generated_doc_paths = sorted(
+        {
+            str(path.relative_to(governance.project_root))
+            for path in generated_doc_paths
+            if generated_doc_paths.count(path) > 1
+        }
+    )
+    if duplicate_generated_doc_paths:
+        issues.append(f"Los documentos generados no deben repetir path: {duplicate_generated_doc_paths}.")
+    for entry in governance.generated_docs:
+        if entry.doc_class not in governance.doc_rules.allowed_doc_classes:
+            issues.append(
+                f"{entry.doc_id}: doc_class '{entry.doc_class}' no esta permitido por doc_rules."
+            )
+        if not entry.generator:
+            issues.append(f"{entry.doc_id}: generator no puede ser vacio.")
+
+    live_state_not_allowed = sorted(
+        set(governance.doc_rules.live_state_allowed_classes) - set(governance.doc_rules.allowed_doc_classes)
+    )
+    if live_state_not_allowed:
+        issues.append(
+            "doc_rules.live_state_allowed_classes debe ser subconjunto de allowed_doc_classes: "
+            f"{live_state_not_allowed}."
+        )
+
+    for rule in governance.watcher.rules:
+        if not rule.patterns:
+            issues.append(f"{rule.rule_id}: watcher.rules.patterns no puede ser vacio.")
+        if not rule.actions:
+            issues.append(f"{rule.rule_id}: watcher.rules.actions no puede ser vacio.")
+        invalid_actions = sorted(set(rule.actions) - WATCHER_ACTIONS)
+        if invalid_actions:
+            issues.append(f"{rule.rule_id}: watcher.rules.actions no soportadas: {invalid_actions}.")
 
     return issues
 
@@ -176,6 +377,21 @@ def load_project_governance(
         config_path=effective_config_path,
         environment=environment,
         notebooks=notebooks,
+        watcher=_load_watcher(payload.get("watcher")),
+        official_commands=tuple(
+            sorted(
+                (
+                    _load_official_command(item, effective_project_root)
+                    for item in payload.get("official_commands", [])
+                ),
+                key=lambda entry: entry.order,
+            )
+        ),
+        generated_docs=tuple(
+            _load_generated_doc(item, effective_project_root)
+            for item in payload.get("generated_docs", [])
+        ),
+        doc_rules=_load_doc_rules(payload.get("doc_rules")),
     )
     issues = _manifest_issues(governance)
     if issues:
@@ -196,6 +412,8 @@ def _toml_value(value: object) -> str:
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
+    if isinstance(value, float):
+        return f"{value:.1f}".rstrip("0").rstrip(".")
     if isinstance(value, (tuple, list)):
         return "[" + ", ".join(_toml_value(item) for item in value) + "]"
     raise TypeError(f"Valor TOML no soportado: {value!r}")
@@ -215,7 +433,59 @@ def render_project_governance_toml(governance: ProjectGovernance) -> str:
         f"notebooks_dir = {_toml_value(_relative_to_root(environment.notebooks_dir, governance.project_root))}",
         f"notebook_docs_dir = {_toml_value(_relative_to_root(environment.notebook_docs_dir, governance.project_root))}",
         "",
+        "[watcher]",
+        f"debounce_seconds = {_toml_value(governance.watcher.debounce_seconds)}",
+        f"watched_paths = {_toml_value(governance.watcher.watched_paths)}",
+        "",
     ]
+
+    for rule in governance.watcher.rules:
+        lines.extend(
+            [
+                "[[watcher.rules]]",
+                f"rule_id = {_toml_value(rule.rule_id)}",
+                f"patterns = {_toml_value(rule.patterns)}",
+                f"actions = {_toml_value(rule.actions)}",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "[doc_rules]",
+            f"allowed_doc_classes = {_toml_value(governance.doc_rules.allowed_doc_classes)}",
+            f"live_state_allowed_classes = {_toml_value(governance.doc_rules.live_state_allowed_classes)}",
+            "",
+        ]
+    )
+
+    for entry in sorted(governance.official_commands, key=lambda command: command.order):
+        lines.extend(
+            [
+                "[[official_commands]]",
+                f"order = {entry.order}",
+                f"command_id = {_toml_value(entry.command_id)}",
+                f"script_path = {_toml_value(_relative_to_root(entry.script_path, governance.project_root))}",
+                f"purpose = {_toml_value(entry.purpose)}",
+                f"verification = {_toml_value(entry.verification)}",
+                f"impacted_artifacts = {_toml_value(entry.impacted_artifacts)}",
+                f"document_in_bitacora = {_toml_value(entry.document_in_bitacora)}",
+                "",
+            ]
+        )
+
+    for entry in governance.generated_docs:
+        lines.extend(
+            [
+                "[[generated_docs]]",
+                f"doc_id = {_toml_value(entry.doc_id)}",
+                f"path = {_toml_value(_relative_to_root(entry.path, governance.project_root))}",
+                f"generator = {_toml_value(entry.generator)}",
+                f"doc_class = {_toml_value(entry.doc_class)}",
+                f"source_paths = {_toml_value(entry.source_paths)}",
+                "",
+            ]
+        )
 
     for entry in sorted(governance.notebooks, key=lambda notebook: notebook.order):
         lines.extend(

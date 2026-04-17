@@ -1,12 +1,17 @@
-# Guias Operativas
+# Guias operativas
 
-Esta carpeta contiene guias de trabajo, roadmaps de continuacion y documentos de decision operativa del proyecto.
+Esta carpeta contiene criterio durable, reglas manuales y continuidad de trabajo.
 
 Uso recomendado:
 
-- `docs/research`: investigacion tecnica y analisis de librerias o fuentes.
-- `docs/notebooks`: exportaciones generadas desde notebooks.
-- `docs/notebooks/README.md`: inventario generado de notebooks oficiales registrados en `config/project_governance.toml`.
-- `docs/guides`: guias manuales de como continuar, que hacer a continuacion y criterios de trabajo.
-- `docs/guides/como-continuar-etl.md`: continuidad operativa del flujo MatchHistory actual.
-- `docs/guides/reglas-escalado-seguro.md`: reglas para escalar el proyecto sin perder alineacion ni eficiencia.
+- `docs/generated/*`: estado vivo derivado del proyecto. No editar manualmente.
+- `docs/notebooks/*`: exportaciones generadas de notebooks oficiales.
+- `docs/guides/*`: criterios, reglas y continuidad estable. No duplicar metricas ni estado vivo.
+- `docs/research/*`: investigacion tecnica y referencias profundas.
+
+Referencias principales:
+
+- `docs/guides/como-continuar-etl.md`
+- `docs/guides/reglas-escalado-seguro.md`
+- `docs/generated/project-status.md`
+- `docs/generated/official-commands.md`

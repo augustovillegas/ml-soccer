@@ -25,6 +25,12 @@ def test_project_governance_loads_environment_and_registered_notebooks() -> None
     assert governance.environment.kernel_display_name == "football-ml (.venv)"
     assert governance.environment.notebooks_dir == PROJECT_ROOT / "notebooks"
     assert governance.environment.notebook_docs_dir == PROJECT_ROOT / "docs" / "notebooks"
+    assert governance.watcher.watched_paths
+    assert governance.watcher.rules
+    assert governance.official_commands
+    assert governance.generated_docs
+    assert governance.doc_rules.allowed_doc_classes
+    assert governance.doc_rules.live_state_allowed_classes
 
     notebook_ids = [entry.notebook_id for entry in governance.notebooks]
     assert notebook_ids == ["explorer_matchhistory", "silver_matchhistory"]

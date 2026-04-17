@@ -14,13 +14,18 @@ import pandas as pd
 from football_ml.config import load_ingestion_config
 from football_ml.export_notebook_cells import check_generated_markdown_sync
 from football_ml.governance import PROJECT_GOVERNANCE_PATH
+from football_ml.governed_docs import check_generated_docs_sync
 from football_ml.paths import (
+    COMMAND_LEDGER_PATH,
     CONFIG_DIR,
     DATA_DIR,
+    DOCS_DIR,
+    DOCS_GENERATED_DIR,
     EXPECTED_KERNEL_DISPLAY_NAME,
     EXPECTED_KERNEL_NAME,
     EXPECTED_PYTHON,
     EXPECTED_PYTHON_VERSION,
+    GOVERNANCE_LOGS_DIR,
     LOGS_DIR,
     ManagedDataset,
     ManagedNotebook,
@@ -28,8 +33,11 @@ from football_ml.paths import (
     NOTEBOOKS_DIR,
     PROJECT_GOVERNANCE,
     PROJECT_ROOT,
+    doc_rules,
+    iter_generated_docs,
     iter_managed_datasets,
     iter_managed_notebooks,
+    iter_official_commands,
     relative_to_project,
 )
 from football_ml.sync_project import check_notebooks_index_sync, check_requirements_sync
@@ -59,17 +67,25 @@ SUSPICIOUS_SEQUENCES = (
     "\u00e2\u20ac\u0153",
     "\u00e2\u20ac",
 )
-REQUIRED_IMPORTS = ("soccerdata", "pandas", "pyarrow", "jupyter", "notebook", "pytest")
+REQUIRED_IMPORTS = ("soccerdata", "pandas", "pyarrow", "jupyter", "notebook", "pytest", "watchdog")
 NOTEBOOK_FORBIDDEN_SNIPPETS = ("MatchHistory(", "read_games(")
 MANAGED_NOTEBOOK_PATTERN = re.compile(r"^\d{2}_[a-z0-9]+(?:_[a-z0-9]+)*\.ipynb$")
 CELL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 HEADING_PATTERN = re.compile(r"^# \d+\. .+")
 VALID_DATASET_STAGES = {"bronze", "silver", "gold"}
 BOOTSTRAP_REQUIRED_SNIPPETS = (
-    "PROJECT_ROOT = Path.cwd().parent if Path.cwd().name == \"notebooks\" else Path.cwd()",
-    "EXPECTED_PYTHON = (PROJECT_ROOT / \".venv\" / \"Scripts\" / \"python.exe\").resolve()",
+    'PROJECT_ROOT = Path.cwd().parent if Path.cwd().name == "notebooks" else Path.cwd()',
+    'EXPECTED_PYTHON = (PROJECT_ROOT / ".venv" / "Scripts" / "python.exe").resolve()',
     "Path(sys.executable).resolve() != EXPECTED_PYTHON",
-    "pd.set_option(\"display.max_columns\", None)",
+    'pd.set_option("display.max_columns", None)',
+)
+GUIDE_FORBIDDEN_PATTERNS = (
+    ("siguiente notebook", re.compile(r"Siguiente:\s*Notebook", re.IGNORECASE)),
+    ("comando schtasks", re.compile(r"\bschtasks(?:\.exe)?\b", re.IGNORECASE)),
+    ("metrica derivable de partidos", re.compile(r"\b\d{3,}\s+partidos\b", re.IGNORECASE)),
+    ("metrica derivable de columnas", re.compile(r"\b\d{2,}\s+columnas\b", re.IGNORECASE)),
+    ("metrica derivable de filas", re.compile(r"\b\d{3,}\s+filas\b", re.IGNORECASE)),
+    ("schedule concreto", re.compile(r"\b\d{2}:\d{2}\b")),
 )
 
 
@@ -434,6 +450,81 @@ def _check_generated_notebook_doc(managed_notebooks: tuple[ManagedNotebook, ...]
     return issues
 
 
+def _document_class(path: Path) -> str | None:
+    relative = relative_to_project(path).as_posix()
+    if relative == "BITACORA_ENTORNO.md":
+        return "ledger"
+    if relative.startswith("docs/generated/"):
+        return "generated"
+    if relative == "docs/notebooks/README.md":
+        return "generated"
+    if relative.startswith("docs/notebooks/") and relative.endswith("_cells.md"):
+        return "notebook_export"
+    if relative.startswith("docs/guides/"):
+        return "guide"
+    if relative.startswith("docs/research/"):
+        return "research"
+    return None
+
+
+def _manual_guide_live_state_issues() -> list[str]:
+    issues: list[str] = []
+    governance_doc_rules = doc_rules()
+
+    if "guide" in governance_doc_rules.live_state_allowed_classes:
+        return issues
+
+    for guide_path in sorted((DOCS_DIR / "guides").glob("*.md")):
+        if not guide_path.is_file():
+            continue
+        text = guide_path.read_text(encoding="utf-8")
+        for label, pattern in GUIDE_FORBIDDEN_PATTERNS:
+            if pattern.search(text):
+                issues.append(
+                    f"{relative_to_project(guide_path)}: una guia manual no puede contener estado vivo derivable ({label})."
+                )
+                break
+
+    return issues
+
+
+def _generated_doc_class_issues() -> list[str]:
+    issues: list[str] = []
+    governance_doc_rules = doc_rules()
+    generated_doc_paths = {entry.path.resolve() for entry in iter_generated_docs()}
+
+    for path in [PROJECT_ROOT / "BITACORA_ENTORNO.md", *(DOCS_GENERATED_DIR.glob("*.md"))]:
+        if not path.exists():
+            continue
+        path_class = _document_class(path)
+        if path_class not in governance_doc_rules.allowed_doc_classes:
+            issues.append(
+                f"{relative_to_project(path)}: doc_class '{path_class}' fuera de las clases permitidas."
+            )
+        if path.resolve() != (PROJECT_ROOT / "BITACORA_ENTORNO.md").resolve() and path.resolve() not in generated_doc_paths:
+            issues.append(
+                f"{relative_to_project(path)}: todo documento bajo docs/generated debe declararse en generated_docs."
+            )
+
+    return issues
+
+
+def _official_command_alignment_issues() -> list[str]:
+    issues: list[str] = []
+
+    for command in iter_official_commands():
+        if not command.script_path.exists():
+            issues.append(f"Falta el script oficial declarado: {command.script_path}")
+            continue
+        script_text = command.script_path.read_text(encoding="utf-8")
+        if f'-CommandId "{command.command_id}"' not in script_text and f"-CommandId '{command.command_id}'" not in script_text:
+            issues.append(
+                f"{relative_to_project(command.script_path)}: el script oficial debe declarar Invoke-GovernedCommand con command_id '{command.command_id}'."
+            )
+
+    return issues
+
+
 def _check_required_paths(config) -> list[str]:
     issues: list[str] = []
     required_paths = [
@@ -443,15 +534,23 @@ def _check_required_paths(config) -> list[str]:
         PROJECT_GOVERNANCE_PATH,
         CONFIG_DIR / "ingestion.toml",
         KERNELSPEC_PATH,
+        PROJECT_ROOT / "scripts" / "_governance.ps1",
         PROJECT_ROOT / "scripts" / "scaffold-notebook.ps1",
         PROJECT_ROOT / "scripts" / "sync-project.ps1",
+        PROJECT_ROOT / "scripts" / "watch-project.ps1",
+        PROJECT_ROOT / ".githooks" / "pre-commit",
+        PROJECT_ROOT / ".githooks" / "pre-commit.ps1",
+        PROJECT_ROOT / ".githooks" / "pre-push",
+        PROJECT_ROOT / ".githooks" / "pre-push.ps1",
         PROJECT_ROOT / ".github" / "workflows" / "project-governance.yml",
         DATA_DIR / "bronze",
         DATA_DIR / "silver",
         DATA_DIR / "gold",
         NOTEBOOKS_DIR,
         NOTEBOOK_DOCS_DIR,
+        DOCS_GENERATED_DIR,
         LOGS_DIR / "ingestion",
+        GOVERNANCE_LOGS_DIR,
         *config.iter_required_dirs(),
     ]
     for path in required_paths:
@@ -505,6 +604,9 @@ def main() -> int:
         for path in (
             PROJECT_ROOT / "AGENTS.md",
             PROJECT_ROOT / "BITACORA_ENTORNO.md",
+            DOCS_GENERATED_DIR / "README.md",
+            DOCS_GENERATED_DIR / "official-commands.md",
+            DOCS_GENERATED_DIR / "project-status.md",
             NOTEBOOK_DOCS_DIR / "README.md",
             PROJECT_ROOT / "tests",
             PROJECT_ROOT / "docs" / "guides" / "README.md",
@@ -524,6 +626,10 @@ def main() -> int:
         issues.extend(_check_generated_notebook_doc(managed_notebooks))
         issues.extend(check_notebooks_index_sync(PROJECT_GOVERNANCE))
         issues.extend(check_requirements_sync(PROJECT_ROOT / "pyproject.toml", PROJECT_ROOT / "requirements.txt"))
+        issues.extend(check_generated_docs_sync(PROJECT_GOVERNANCE))
+        issues.extend(_generated_doc_class_issues())
+        issues.extend(_official_command_alignment_issues())
+        issues.extend(_manual_guide_live_state_issues())
         issues.extend(_check_mojibake())
 
     if issues:
@@ -537,6 +643,7 @@ def main() -> int:
     print(f"- Python: {sys.executable}")
     print(f"- Kernel: {EXPECTED_KERNEL_DISPLAY_NAME}")
     print(f"- MatchHistory raw dir: {config.raw_dir}")
+    print(f"- Governance ledger: {COMMAND_LEDGER_PATH}")
     return 0
 
 

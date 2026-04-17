@@ -5,6 +5,8 @@ import textwrap
 import pytest
 
 from football_ml.governance import load_project_governance
+from football_ml.governed_docs import check_generated_docs_sync, generated_doc_ids_for_changed_paths, render_bitacora
+from football_ml.command_ledger import CommandLedgerEvent
 from football_ml.scaffold_notebook import scaffold_notebook
 from football_ml.sync_project import check_notebooks_index_sync, check_requirements_sync, render_notebooks_index
 
@@ -96,6 +98,7 @@ def test_notebooks_index_and_requirements_are_synchronized_in_repo() -> None:
 
     assert not check_notebooks_index_sync(governance)
     assert not check_requirements_sync(governance.project_root / "pyproject.toml", governance.project_root / "requirements.txt")
+    assert not check_generated_docs_sync(governance)
 
 
 def test_scaffold_notebook_creates_next_registered_notebook(tmp_path: Path) -> None:
@@ -144,3 +147,40 @@ def test_bootstrap_script_supports_skip_scheduled_task() -> None:
     assert "[switch]$SkipScheduledTask" in script_text
     assert "if ($SkipScheduledTask)" in script_text
     assert "schtasks.exe /Create" in script_text
+    assert "core.hooksPath .githooks" in script_text
+
+
+def test_generated_doc_ids_for_changed_paths_match_operational_sources() -> None:
+    governance = load_project_governance()
+
+    doc_ids = generated_doc_ids_for_changed_paths({"data/bronze/matchhistory/manifests"}, governance)
+
+    assert "project_status_doc" in doc_ids
+
+
+def test_render_bitacora_uses_ledger_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    governance = load_project_governance()
+
+    monkeypatch.setattr(
+        "football_ml.governed_docs.read_command_ledger",
+        lambda: (
+            CommandLedgerEvent(
+                timestamp_utc="2026-04-17T12:00:00Z",
+                command_id="sync_project",
+                command=".\u005cscripts\u005csync-project.ps1",
+                normalized_args=(),
+                goal="sync",
+                status="ok",
+                verification="done",
+                artifacts_updated=(),
+                error_message=None,
+            ),
+        ),
+    )
+
+    rendered = render_bitacora(governance)
+
+    assert "### 3. `sync_project`" in rendered
+    assert "Evidencia local de una ejecucion satisfactoria: `si`." in rendered

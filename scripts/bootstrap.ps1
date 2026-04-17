@@ -6,112 +6,134 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Get-GovernanceStringValue {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Content,
-        [Parameter(Mandatory = $true)]
-        [string]$Key
-    )
+. (Join-Path $PSScriptRoot "_governance.ps1")
 
-    $pattern = "(?m)^\s*$([regex]::Escape($Key))\s*=\s*""([^""]+)""\s*$"
-    $match = [regex]::Match($Content, $pattern)
-    if (-not $match.Success) {
-        throw "No se pudo leer '$Key' desde config\\project_governance.toml."
-    }
-    return $match.Groups[1].Value
-}
-
-$projectRoot = Split-Path -Parent $PSScriptRoot
-$venvDir = Join-Path $projectRoot ".venv"
-$venvPython = Join-Path $venvDir "Scripts\\python.exe"
-$srcPath = Join-Path $projectRoot "src"
-$refreshScript = Join-Path $projectRoot "scripts\\refresh-matchhistory.ps1"
-$governanceConfigPath = Join-Path $projectRoot "config\\project_governance.toml"
-$taskConfigJson = $null
-
-if (-not (Test-Path $governanceConfigPath)) {
-    throw "No existe '$governanceConfigPath'."
-}
-
-$governanceContent = Get-Content -LiteralPath $governanceConfigPath -Raw -Encoding UTF8
-$pythonVersion = Get-GovernanceStringValue -Content $governanceContent -Key "python_version"
-$kernelName = Get-GovernanceStringValue -Content $governanceContent -Key "kernel_name"
-$kernelDisplayName = Get-GovernanceStringValue -Content $governanceContent -Key "kernel_display_name"
-
-if (-not (Test-Path $venvPython)) {
-    if (Test-Path $venvDir) {
-        throw "'.venv' existe, pero no contiene '$venvPython'. Recreate el entorno antes de continuar."
-    }
-
-    $pyCommand = Get-Command py -ErrorAction SilentlyContinue
-    if (-not $pyCommand) {
-        throw "No se encontro el lanzador 'py'. Instala Python $pythonVersion o crea '.venv' manualmente."
-    }
-
-    & py "-$pythonVersion" -m venv $venvDir
-}
-
-New-Item -ItemType Directory -Force -Path `
-    (Join-Path $projectRoot "data\\bronze\\matchhistory\\raw"), `
-    (Join-Path $projectRoot "data\\bronze\\matchhistory\\inbox"), `
-    (Join-Path $projectRoot "data\\bronze\\matchhistory\\manifests"), `
-    (Join-Path $projectRoot "data\\silver"), `
-    (Join-Path $projectRoot "data\\gold"), `
-    (Join-Path $projectRoot "docs\\notebooks"), `
-    (Join-Path $projectRoot "logs\\ingestion"), `
-    (Join-Path $projectRoot "models"), `
-    (Join-Path $projectRoot "notebooks") | Out-Null
-
-& $venvPython -m pip install --upgrade pip
-if ($LASTEXITCODE -ne 0) {
-    throw "Fallo la actualizacion de pip dentro del entorno virtual."
-}
-
-& $venvPython -m pip install -r (Join-Path $projectRoot "requirements.txt")
-if ($LASTEXITCODE -ne 0) {
-    throw "Fallo la instalacion de dependencias desde requirements.txt."
-}
-
-& $venvPython -m pip install -e $projectRoot
-if ($LASTEXITCODE -ne 0) {
-    throw "Fallo la instalacion editable del paquete local 'football-ml'."
-}
-
-& $venvPython -m ipykernel install --prefix $venvDir --name $kernelName --display-name $kernelDisplayName
-if ($LASTEXITCODE -ne 0) {
-    throw "Fallo el registro del kernel '$kernelDisplayName'."
-}
-
-if ([string]::IsNullOrWhiteSpace($env:PYTHONPATH)) {
-    $env:PYTHONPATH = $srcPath
-} else {
-    $env:PYTHONPATH = "$srcPath;$($env:PYTHONPATH)"
-}
-
-& (Join-Path $PSScriptRoot "validate-project.ps1") -Scope project
-if ($LASTEXITCODE -ne 0) {
-    throw "La validacion final del proyecto fallo."
-}
-
+$commandTokens = @(".\scripts\bootstrap.ps1")
+$normalizedArgs = @()
 if ($SkipScheduledTask) {
-    return
+    $commandTokens += "-SkipScheduledTask"
+    $normalizedArgs += "--skip-scheduled-task"
 }
 
-$taskConfigJson = & $venvPython -c "from football_ml.config import load_automation_config; import json; cfg = load_automation_config(); print(json.dumps({'task_name': cfg.task_name, 'schedule_time': cfg.schedule_time}))"
-if ($LASTEXITCODE -ne 0) {
-    throw "No se pudo leer la configuracion de automatizacion desde 'config\\ingestion.toml'."
-}
+Invoke-GovernedCommand `
+    -CommandId "bootstrap_project" `
+    -CommandTokens $commandTokens `
+    -NormalizedArgs $normalizedArgs `
+    -ArtifactsUpdated @(".venv", ".githooks", "logs/governance/command-ledger.jsonl") `
+    -Action {
+        function Get-GovernanceStringValue {
+            param(
+                [Parameter(Mandatory = $true)]
+                [string]$Content,
+                [Parameter(Mandatory = $true)]
+                [string]$Key
+            )
 
-$taskConfig = $taskConfigJson | ConvertFrom-Json
-$currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-$userId = $currentIdentity.User.Value
-$author = "$env:USERDOMAIN\$env:USERNAME"
-$scheduleDate = Get-Date
-$scheduleTimeParts = $taskConfig.schedule_time -split ":"
-$scheduleBoundary = Get-Date -Year $scheduleDate.Year -Month $scheduleDate.Month -Day $scheduleDate.Day -Hour ([int]$scheduleTimeParts[0]) -Minute ([int]$scheduleTimeParts[1]) -Second 0
-$taskXmlPath = Join-Path ([System.IO.Path]::GetTempPath()) "$($taskConfig.task_name).xml"
-$taskXml = @"
+            $pattern = "(?m)^\s*$([regex]::Escape($Key))\s*=\s*""([^""]+)""\s*$"
+            $match = [regex]::Match($Content, $pattern)
+            if (-not $match.Success) {
+                throw "No se pudo leer '$Key' desde config\project_governance.toml."
+            }
+            return $match.Groups[1].Value
+        }
+
+        $projectRoot = Split-Path -Parent $PSScriptRoot
+        $venvDir = Join-Path $projectRoot ".venv"
+        $venvPython = Join-Path $venvDir "Scripts\python.exe"
+        $srcPath = Join-Path $projectRoot "src"
+        $refreshScript = Join-Path $projectRoot "scripts\refresh-matchhistory.ps1"
+        $governanceConfigPath = Join-Path $projectRoot "config\project_governance.toml"
+        $taskConfigJson = $null
+
+        if (-not (Test-Path $governanceConfigPath)) {
+            throw "No existe '$governanceConfigPath'."
+        }
+
+        $governanceContent = Get-Content -LiteralPath $governanceConfigPath -Raw -Encoding UTF8
+        $pythonVersion = Get-GovernanceStringValue -Content $governanceContent -Key "python_version"
+        $kernelName = Get-GovernanceStringValue -Content $governanceContent -Key "kernel_name"
+        $kernelDisplayName = Get-GovernanceStringValue -Content $governanceContent -Key "kernel_display_name"
+
+        if (-not (Test-Path $venvPython)) {
+            if (Test-Path $venvDir) {
+                throw "'.venv' existe, pero no contiene '$venvPython'. Recreate el entorno antes de continuar."
+            }
+
+            $pyCommand = Get-Command py -ErrorAction SilentlyContinue
+            if (-not $pyCommand) {
+                throw "No se encontro el lanzador 'py'. Instala Python $pythonVersion o crea '.venv' manualmente."
+            }
+
+            & py "-$pythonVersion" -m venv $venvDir
+        }
+
+        New-Item -ItemType Directory -Force -Path `
+            (Join-Path $projectRoot "data\bronze\matchhistory\raw"), `
+            (Join-Path $projectRoot "data\bronze\matchhistory\inbox"), `
+            (Join-Path $projectRoot "data\bronze\matchhistory\manifests"), `
+            (Join-Path $projectRoot "data\silver"), `
+            (Join-Path $projectRoot "data\gold"), `
+            (Join-Path $projectRoot "docs\generated"), `
+            (Join-Path $projectRoot "docs\notebooks"), `
+            (Join-Path $projectRoot "logs\governance"), `
+            (Join-Path $projectRoot "logs\ingestion"), `
+            (Join-Path $projectRoot "models"), `
+            (Join-Path $projectRoot "notebooks") | Out-Null
+
+        & $venvPython -m pip install --upgrade pip
+        if ($LASTEXITCODE -ne 0) {
+            throw "Fallo la actualizacion de pip dentro del entorno virtual."
+        }
+
+        & $venvPython -m pip install -r (Join-Path $projectRoot "requirements.txt")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Fallo la instalacion de dependencias desde requirements.txt."
+        }
+
+        & $venvPython -m pip install -e $projectRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "Fallo la instalacion editable del paquete local 'football-ml'."
+        }
+
+        & $venvPython -m ipykernel install --prefix $venvDir --name $kernelName --display-name $kernelDisplayName
+        if ($LASTEXITCODE -ne 0) {
+            throw "Fallo el registro del kernel '$kernelDisplayName'."
+        }
+
+        if ([string]::IsNullOrWhiteSpace($env:PYTHONPATH)) {
+            $env:PYTHONPATH = $srcPath
+        } else {
+            $env:PYTHONPATH = "$srcPath;$($env:PYTHONPATH)"
+        }
+
+        $gitCommand = Get-Command git -ErrorAction SilentlyContinue
+        if ($gitCommand -and (Test-Path (Join-Path $projectRoot ".git"))) {
+            & git -C $projectRoot config core.hooksPath .githooks | Out-Null
+        }
+
+        & (Join-Path $PSScriptRoot "validate-project.ps1") -Scope project
+        if ($LASTEXITCODE -ne 0) {
+            throw "La validacion final del proyecto fallo."
+        }
+
+        if ($SkipScheduledTask) {
+            return
+        }
+
+        $taskConfigJson = & $venvPython -c "from football_ml.config import load_automation_config; import json; cfg = load_automation_config(); print(json.dumps({'task_name': cfg.task_name, 'schedule_time': cfg.schedule_time}))"
+        if ($LASTEXITCODE -ne 0) {
+            throw "No se pudo leer la configuracion de automatizacion desde 'config\ingestion.toml'."
+        }
+
+        $taskConfig = $taskConfigJson | ConvertFrom-Json
+        $currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $userId = $currentIdentity.User.Value
+        $author = "$env:USERDOMAIN\$env:USERNAME"
+        $scheduleDate = Get-Date
+        $scheduleTimeParts = $taskConfig.schedule_time -split ":"
+        $scheduleBoundary = Get-Date -Year $scheduleDate.Year -Month $scheduleDate.Month -Day $scheduleDate.Day -Hour ([int]$scheduleTimeParts[0]) -Minute ([int]$scheduleTimeParts[1]) -Second 0
+        $taskXmlPath = Join-Path ([System.IO.Path]::GetTempPath()) "$($taskConfig.task_name).xml"
+        $taskXml = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
@@ -159,15 +181,16 @@ $taskXml = @"
 </Task>
 "@
 
-Set-Content -LiteralPath $taskXmlPath -Value $taskXml -Encoding Unicode
-& schtasks.exe /Create /TN $taskConfig.task_name /XML $taskXmlPath /F | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    throw "No se pudo registrar la tarea programada '$($taskConfig.task_name)' con schtasks."
-}
+        Set-Content -LiteralPath $taskXmlPath -Value $taskXml -Encoding Unicode
+        & schtasks.exe /Create /TN $taskConfig.task_name /XML $taskXmlPath /F | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "No se pudo registrar la tarea programada '$($taskConfig.task_name)' con schtasks."
+        }
 
-& schtasks.exe /Query /TN $taskConfig.task_name | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    throw "No se pudo confirmar el registro de la tarea programada '$($taskConfig.task_name)'."
-}
+        & schtasks.exe /Query /TN $taskConfig.task_name | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "No se pudo confirmar el registro de la tarea programada '$($taskConfig.task_name)'."
+        }
 
-Remove-Item -LiteralPath $taskXmlPath -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $taskXmlPath -ErrorAction SilentlyContinue
+    }

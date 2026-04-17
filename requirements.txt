@@ -4,3 +4,4 @@ pyarrow==23.0.1
 jupyter==1.1.1
 notebook==7.5.5
 pytest==8.3.5
+watchdog==6.0.0
